@@ -11,7 +11,12 @@ pub const LAYOUT_HELPER: bool = true;
 
 fn test_main(n_node: usize, _n_edge: usize) {
     let mut svg = SVGWriter::new();
-    let mut gb = VisualGraph::new(Orientation::LeftToRight);
+    let mut gb = VisualGraph::new(Orientation::LeftToRight, Element::create(
+        ShapeKind::Frame(Some("Main Graph".to_string())),
+        StyleAttr::new(Color::transparent(), 0, None, 0, 0),
+        Orientation::LeftToRight,
+        Point::zero(),
+    ));
 
     for i in 0..n_node {
         let elem = Element::create(
