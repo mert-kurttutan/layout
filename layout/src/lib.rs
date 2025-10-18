@@ -70,6 +70,7 @@ fn simple_graph() {
     use layout::topo::layout::VisualGraph;
     use layout::topo::placer::Placer;
     use std::fs;
+    use layout::adt::dag::SubgraphHandle;
 
     // Create a new graph:
     let mut vg = VisualGraph::new(Orientation::LeftToRight);
@@ -85,8 +86,9 @@ fn simple_graph() {
     let node1 = Element::create(sp1, look1, Orientation::LeftToRight, sz);
 
     // Add the nodes to the graph, and save a handle to each node.
-    let handle0 = vg.add_node(node0);
-    let handle1 = vg.add_node(node1);
+    let main_subgraph_handle = SubgraphHandle::new(0);
+    let handle0 = vg.add_node(node0, main_subgraph_handle);
+    let handle1 = vg.add_node(node1, main_subgraph_handle);
 
     // Add an edge between the nodes.
     let arrow = Arrow::simple("123");

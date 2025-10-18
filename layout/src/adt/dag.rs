@@ -83,7 +83,7 @@ pub type RankType = Vec<Vec<NodeHandle>>;
 impl NTree {
     pub fn new() -> Self {
         NTree {
-            subgraphs: Vec::new(),
+            subgraphs: vec![Subgraph::new(SubgraphHandle::new(0))],
         }
     }
 
