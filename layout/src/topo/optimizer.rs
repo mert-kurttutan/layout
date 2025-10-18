@@ -252,7 +252,8 @@ impl<'a> RankOptimizer<'a> {
         for new_rank in curr_rank..highest_next {
             let mut found_in_subgraph = false;
             for n in self.dag.row(new_rank).iter() {
-                let shares_subgraph = self.dag.is_inside_same_subgraph(node, *n);
+                let shares_subgraph =
+                    self.dag.is_inside_same_subgraph(node, *n);
                 if shares_subgraph && n.get_index() != node.get_index() {
                     found_in_subgraph = true;
                     break;

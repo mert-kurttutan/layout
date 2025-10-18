@@ -435,24 +435,6 @@ impl DAG {
         }
         levels
     }
-
-    pub(crate) fn normalize_levels(&mut self) {
-        // Normalize in that the first non empty elevel is zeroth level
-        let mut min_level = usize::MAX;
-        for lvl in self.levels.iter() {
-            if *lvl < min_level {
-                min_level = *lvl;
-            }
-        }
-        for lvl in self.levels.iter_mut() {
-            *lvl -= min_level;
-        }
-
-        (0..min_level).for_each(|_| {
-            assert!(self.ranks[0].is_empty());
-            self.ranks.remove(0);
-        });
-    }
     /// \returns True if the node \to is reachable from the node \p from.
     /// This internal method is used for the verification of the graph.
     fn is_reachable_inner(

@@ -78,6 +78,5 @@ pub(crate) fn do_it(vg: &mut VisualGraph) {
     for _ in 0..SANDERS_ITERATIONS {
         do_it_inner(vg, &mut column_map);
     }
-    vg.dag.normalize_levels();
     prepare_borders(vg);
 }
