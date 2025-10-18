@@ -353,7 +353,6 @@ impl GraphBuilder {
         let mut node_map = HashMap::new();
         let mut subgraph_map = HashMap::new();
 
-
         subgraph_map.insert(
             self.main_graph.name.clone(),
             (Vec::new(), SubgraphHandle::new(0)),
