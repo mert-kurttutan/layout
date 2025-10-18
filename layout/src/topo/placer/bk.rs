@@ -2,7 +2,7 @@
 //! paper "Fast and Simple Horizontal Coordinate Assignment."
 
 use super::simple;
-use crate::adt::dag::NodeHandle;
+use crate::adt::dag::{NodeHandle, SubgraphHandle};
 use crate::core::geometry::weighted_median;
 use crate::topo::layout::VisualGraph;
 use std::collections::HashSet;
@@ -191,7 +191,6 @@ impl<'a> Scheduler<'a> {
             }
         };
         while to_place > 0 {
-            // for idx in 0..self.vl.len() {
             for i in idx_range.clone() {
                 if !self.is_vertical_ready(i) {
                     continue;
@@ -246,6 +245,11 @@ impl<'a> Scheduler<'a> {
                 self.last_x_for_row[level] = center_x - side_x;
             }
             self.sched_idx[level] += 1;
+            let layer_length = self.vg.dag.row(level).len();
+            assert!(
+                self.sched_idx[level] <= layer_length,
+                "sched_idx out of bounds"
+            );
         }
     }
 
@@ -377,6 +381,26 @@ impl<'a> BK<'a> {
                 valid_edges.insert(e);
             }
         }
+        // insert every edge in borders
+        for s in 0..self.vg.dag.num_subgraphs() {
+            let left_borders =
+                self.vg.dag.subgraph_left_borders(SubgraphHandle::new(s));
+            let left_borders_len = left_borders.len();
+            for i in 1..left_borders_len {
+                let from = left_borders[i - 1];
+                let to = left_borders[i];
+                valid_edges.insert((from, to));
+            }
+            let right_borders =
+                self.vg.dag.subgraph_right_borders(SubgraphHandle::new(s));
+            let right_borders_len = right_borders.len();
+            for i in 1..right_borders_len {
+                let from = right_borders[i - 1];
+                let to = right_borders[i];
+                valid_edges.insert((from, to));
+            }
+        }
+
         valid_edges
     }
 
@@ -389,19 +413,22 @@ impl<'a> BK<'a> {
     ) -> Vec<(NodeHandle, NodeHandle)> {
         let mut regular_edges: Vec<EdgeIdxs> = Vec::new();
         let mut strong_edges: Vec<EdgeIdxs> = Vec::new();
+        let mut border_edges: Vec<EdgeIdxs> = Vec::new();
         // For each node in R0:
         for (idx0, elem) in r0.iter().enumerate() {
             // For each successor:
-            let nodes = self.vg.succ(*elem);
-            for succ in nodes {
-                // Check if and where it points to in R1. (we could have
-                // same-row self-edges).
+            for succ in self.vg.succ(*elem) {
                 if let Option::Some(idx1) = r1.iter().position(|&r| r == *succ)
                 {
                     // Figure out if this is a strong edge or a regular edge.
                     let c0 = self.vg.is_connector(*elem);
                     let c1 = self.vg.is_connector(*succ);
-                    if c0 && c1 {
+
+                    let b0 = self.vg.dag.is_vertical_border(*elem);
+                    let b1 = self.vg.dag.is_vertical_border(*succ);
+                    if b0 && b1 {
+                        border_edges.push((idx0, idx1));
+                    } else if c0 && c1 {
                         strong_edges.push((idx0, idx1));
                     } else {
                         regular_edges.push((idx0, idx1));
@@ -411,24 +438,32 @@ impl<'a> BK<'a> {
         }
         let mut res: Vec<(NodeHandle, NodeHandle)> = Vec::new();
 
-        'outer: for reg in regular_edges.iter() {
-            for strong in strong_edges.iter() {
-                // Check if there is no conflict.
-                if Self::are_edges_crossing(*reg, *strong) {
-                    // Continue to the next strong edges.
-                    continue;
-                }
-
-                // Found a conflict, we must not register this edge.
-                continue 'outer;
+        for reg in regular_edges.iter() {
+            let conflict1 = strong_edges
+                .iter()
+                .any(|strong| Self::are_edges_crossing(*reg, *strong));
+            let conflict2 = border_edges
+                .iter()
+                .any(|border| Self::are_edges_crossing(*reg, *border));
+            // None of the strong edges conflicted with the regular edge.
+            if !conflict1 && !conflict2 {
+                res.push((r0[reg.0], r1[reg.1]));
             }
-            // None of the strong edges conflicted with the regular edge.
-            res.push((r0[reg.0], r1[reg.1]));
         }
+        // turn above into iter inside iter
+        let conflict = border_edges.iter().any(|border| {
+            strong_edges
+                .iter()
+                .any(|strong| Self::are_edges_crossing(*strong, *border))
+        });
+        assert!(!conflict, "strong edge conflicts with border edge");
 
-        // Now also add the strong edges.
+        // add border edges.
+        for border in border_edges {
+            res.push((r0[border.0], r1[border.1]));
+        }
+        // add strong edges
         for strong in strong_edges {
-            // None of the strong edges conflicted with the regular edge.
             res.push((r0[strong.0], r1[strong.1]));
         }
         res
