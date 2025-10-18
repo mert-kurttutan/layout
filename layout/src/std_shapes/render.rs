@@ -90,6 +90,17 @@ pub fn get_shape_size(
             get_size_for_content(text, font),
             BOX_SHAPE_PADDING,
         ),
+        ShapeKind::Frame(text) => pad_shape_scalar(
+            // get_size_for_content(text, font),
+            {
+                if let Option::Some(txt) = text {
+                    get_size_for_str(txt, font)
+                } else {
+                    Point::new(0., 0.)
+                }
+            },
+            BOX_SHAPE_PADDING,
+        ),
     };
     if make_xy_same {
         res = make_size_square(res);
@@ -605,6 +616,27 @@ impl Renderable for Element {
                     &self.look,
                     canvas,
                 );
+            }
+            ShapeKind::Frame(text) => {
+                canvas.draw_rect(
+                    self.pos.bbox(false).0,
+                    self.pos.size(false),
+                    &self.look,
+                    self.properties.clone(),
+                    Option::None,
+                );
+                if let Some(txt_str) = text {
+                    let text_size =
+                        get_size_for_str(txt_str, self.look.font_size);
+                    let x_middle = self.pos.middle().x;
+                    let text_pos = Point::new(
+                        x_middle - text_size.x * 0.,
+                        self.pos.bbox(false).0.y
+                            + text_size.y / 2.
+                            + BORDER_PADDING / 2.,
+                    );
+                    canvas.draw_text(text_pos, txt_str.as_str(), &self.look);
+                }
             }
             ShapeKind::Circle(text) => {
                 canvas.draw_circle(

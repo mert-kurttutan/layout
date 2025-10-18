@@ -70,7 +70,9 @@ impl<'a> EdgeCrossOptimizer<'a> {
     pub fn rotate_rank(&mut self) {
         for i in 0..self.dag.num_levels() {
             let row = self.dag.row_mut(i);
-            row.rotate_left(1);
+            if row.len() >= 1 {
+                row.rotate_left(1);
+            }
         }
     }
 
@@ -224,7 +226,11 @@ impl<'a> RankOptimizer<'a> {
         Self { dag }
     }
 
-    pub fn try_to_sink_node(&mut self, node: NodeHandle) -> bool {
+    pub fn try_to_sink_node(
+        &mut self,
+        node: NodeHandle,
+        max_level: usize,
+    ) -> bool {
         let backs = self.dag.predecessors(node);
         let fwds = self.dag.successors(node);
 
@@ -240,11 +246,31 @@ impl<'a> RankOptimizer<'a> {
             let next_rank = self.dag.level(*elem);
             highest_next = highest_next.min(next_rank);
         }
+        // if the cur subgraph has no node with same subgraph, then dont move
+        // otherwise check how far we can go down with every rank having another node of same subgraph
+        let mut target_rank = curr_rank;
+        for new_rank in curr_rank..highest_next {
+            let mut found_in_subgraph = false;
+            for n in self.dag.row(new_rank).iter() {
+                let shares_subgraph =
+                    self.dag.is_inside_same_subgraph(node, *n);
+                if shares_subgraph && n.get_index() != node.get_index() {
+                    found_in_subgraph = true;
+                    break;
+                }
+            }
+            if !found_in_subgraph {
+                target_rank = new_rank;
+                break;
+            }
+            target_rank = new_rank;
+        }
+        // limit target rank so that it does destroy subgraph layout (fixed previously by compact subgraph)
+        target_rank = target_rank.min(max_level);
 
         // We found an opportunity to sink a node.
-        if highest_next > curr_rank + 1 {
-            self.dag
-                .update_node_rank_level(node, highest_next - 1, None);
+        if target_rank > curr_rank {
+            self.dag.update_node_rank_level(node, target_rank, None);
             return true;
         }
         false
@@ -261,10 +287,14 @@ impl<'a> RankOptimizer<'a> {
         #[cfg(feature = "log")]
         let mut iter = 0;
 
+        let subgraph_levels = self.dag.get_subgraph_levels();
+
         loop {
             let mut c = 0;
             for node in self.dag.iter() {
-                if self.try_to_sink_node(node) {
+                let (_, max_lvl) = subgraph_levels
+                    [self.dag.get_parent_subgraph_index_n(node).get_index()];
+                if self.try_to_sink_node(node, max_lvl) {
                     c += 1;
                 }
             }

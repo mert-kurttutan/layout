@@ -49,7 +49,7 @@ impl AttributeList {
         self.list.push((from, to));
     }
 
-    pub fn iter(&self) -> std::slice::Iter<(String, DotString)> {
+    pub fn iter(&self) -> std::slice::Iter<'_, (String, DotString)> {
         self.list.iter()
     }
 }
@@ -129,11 +129,26 @@ impl EdgeStmt {
 }
 
 #[derive(Debug, Clone)]
+pub struct Subgraph {
+    pub name: String,
+    pub list: StmtList,
+}
+
+impl Subgraph {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            list: StmtList::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Edge(EdgeStmt),
     Node(NodeStmt),
     Attribute(AttrStmt),
-    SubGraph(Graph),
+    Subgraph(Graph),
 }
 
 // { ... }
