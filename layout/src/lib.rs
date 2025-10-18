@@ -69,11 +69,20 @@ fn simple_graph() {
     use layout::std_shapes::shapes::*;
     use layout::topo::layout::VisualGraph;
     use layout::topo::placer::Placer;
+    use layout::core::color::Color;
     use std::fs;
     use layout::adt::dag::SubgraphHandle;
 
     // Create a new graph:
-    let mut vg = VisualGraph::new(Orientation::LeftToRight);
+    let mut vg = VisualGraph::new(
+        Orientation::LeftToRight,
+        Element::create(
+            ShapeKind::Frame(Some("Main Graph".to_string())),
+            StyleAttr::new(Color::transparent(), 0, None, 0, 0),
+            Orientation::LeftToRight,
+            Point::zero(),
+        ),
+    );
 
     // Define the node styles:
     let sp0 = ShapeKind::new_box("one");
