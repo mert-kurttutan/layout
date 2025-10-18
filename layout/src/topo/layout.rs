@@ -47,10 +47,10 @@ pub struct VisualGraph {
 }
 
 impl VisualGraph {
-    pub fn new(orientation: Orientation) -> Self {
+    pub fn new(orientation: Orientation, main_graph_selem: Element) -> Self {
         VisualGraph {
             nodes: Vec::new(),
-            subgraphs: vec![],
+            subgraphs: vec![main_graph_selem],
             edges: Vec::new(),
             self_edges: Vec::new(),
             dag: DAG::new(),
