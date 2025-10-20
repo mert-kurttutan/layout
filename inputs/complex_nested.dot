@@ -71,7 +71,7 @@ digraph ComplexSystem {
             gw_ratelimit [label="Rate Limiting" fillcolor="#ffb3b3"];
         }
 
-        gw_auth -> A
+        gw_auth -> A -> B
         
         // Microservices
         subgraph cluster_services {

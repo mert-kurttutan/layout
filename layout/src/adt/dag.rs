@@ -4,7 +4,7 @@
 //! of this data structure may change the leveling of nodes, and the only
 //! guarantee is that the nodes are assigned to some level.
 
-use std::{cmp, vec};
+use std::cmp;
 
 /// The Ranked-DAG data structure.
 #[derive(Debug)]
@@ -61,8 +61,8 @@ enum NodeType {
     VerticalBorder,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum TraverseHandle {
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(crate) enum ContainerHandle {
     Node(NodeHandle),
     Subgraph(SubgraphHandle),
 }
@@ -289,13 +289,21 @@ impl DAG {
 
     pub(crate) fn new_connector_node(
         &mut self,
-        parent_subgraph_idx: SubgraphHandle,
+        from: NodeHandle,
+        to: NodeHandle,
     ) -> NodeHandle {
+        let from_c = self.nesting_edge_pair(from, to).0;
+        let connector_sg_idx = match from_c {
+            ContainerHandle::Node(n) => self.get_parent_subgraph_index_n(n),
+            ContainerHandle::Subgraph(sg) => {
+                self.get_parent_subgraph_index_sg(sg)
+            }
+        };
         self.nodes
-            .push(Node::new(parent_subgraph_idx, NodeType::Connector));
+            .push(Node::new(connector_sg_idx, NodeType::Connector));
         self.levels.push(0);
         let node = NodeHandle::new(self.nodes.len() - 1);
-        self.nesting_tree.subgraphs[parent_subgraph_idx.idx]
+        self.nesting_tree.subgraphs[connector_sg_idx.idx]
             .nodes
             .push(node);
         self.add_element_to_rank(node, 0, false);
@@ -341,26 +349,6 @@ impl DAG {
         from: SubgraphHandle,
     ) -> &Vec<SubgraphHandle> {
         &self.nesting_tree.subgraphs[from.idx].subgraphs
-    }
-
-    pub(crate) fn is_inside_same_subgraph(
-        &self,
-        from: NodeHandle,
-        to: NodeHandle,
-    ) -> bool {
-        let from_sg = self.get_parent_subgraph_index_n(from);
-        let mut cur_sg = self.get_parent_subgraph_index_n(to);
-        if cur_sg.get_index() == from_sg.get_index() {
-            return true;
-        }
-        while cur_sg.get_index() != 0 {
-            let parent_sg = self.get_parent_subgraph_index_sg(cur_sg);
-            if parent_sg.get_index() == from_sg.get_index() {
-                return true;
-            }
-            cur_sg = parent_sg;
-        }
-        false
     }
 
     pub fn single_pred(&self, from: NodeHandle) -> Option<NodeHandle> {
@@ -433,8 +421,86 @@ impl DAG {
                 levels[i].1 = cmp::max(levels[i].1, levels[child.idx].1);
             }
         }
+        for (i, s) in self.nesting_tree.subgraphs.iter().enumerate() {
+            let parent_idx = s.parent_subgraph_idx;
+            if levels[i].0 > levels[i].1 {
+                // No nodes in this subgraph.
+                levels[i].0 = levels[parent_idx.idx].0;
+                levels[i].1 = levels[parent_idx.idx].0;
+            }
+        }
         levels
     }
+
+    fn is_reachable_inner_c(
+        &self,
+        from: ContainerHandle,
+        to: ContainerHandle,
+        visited_nodes: &mut Vec<bool>,
+        visited_subgraphs: &mut Vec<bool>,
+        node_successors_c: &Vec<Vec<ContainerHandle>>,
+        subgraph_successors_c: &Vec<Vec<ContainerHandle>>,
+    ) -> bool {
+        if from == to {
+            return true;
+        }
+
+        match from {
+            ContainerHandle::Node(n) => {
+                // Don't step into a cycle.
+                if visited_nodes[n.idx] {
+                    return false;
+                }
+
+                // Push to the dfs stack.
+                visited_nodes[n.idx] = true;
+
+                for edge in &node_successors_c[n.idx] {
+                    if self.is_reachable_inner_c(
+                        edge.clone(),
+                        to.clone(),
+                        visited_nodes,
+                        visited_subgraphs,
+                        node_successors_c,
+                        subgraph_successors_c,
+                    ) {
+                        return true;
+                    }
+                }
+
+                // Pop from the dfs stack.
+                visited_nodes[n.idx] = false;
+            }
+            ContainerHandle::Subgraph(s) => {
+                // Don't step into a cycle.
+                if visited_subgraphs[s.idx] {
+                    return false;
+                }
+
+                // Push to the dfs stack.
+                visited_subgraphs[s.idx] = true;
+
+                for edge in &subgraph_successors_c[s.idx] {
+                    if self.is_reachable_inner_c(
+                        edge.clone(),
+                        to.clone(),
+                        visited_nodes,
+                        visited_subgraphs,
+                        node_successors_c,
+                        subgraph_successors_c,
+                    ) {
+                        return true;
+                    }
+                }
+
+                // Pop from the dfs stack.
+                visited_subgraphs[s.idx] = false;
+            }
+        }
+
+        false
+    }
+
     /// \returns True if the node \to is reachable from the node \p from.
     /// This internal method is used for the verification of the graph.
     fn is_reachable_inner(
@@ -467,6 +533,30 @@ impl DAG {
         false
     }
 
+    fn is_reachable_c(
+        &self,
+        from: ContainerHandle,
+        to: ContainerHandle,
+        node_successors_c: &Vec<Vec<ContainerHandle>>,
+        subgraph_successors_c: &Vec<Vec<ContainerHandle>>,
+    ) -> bool {
+        if from == to {
+            return true;
+        }
+        let mut visited_nodes = vec![false; self.nodes.len()];
+        let mut visited_subgraphs =
+            vec![false; self.nesting_tree.subgraphs.len()];
+
+        self.is_reachable_inner_c(
+            from,
+            to,
+            &mut visited_nodes,
+            &mut visited_subgraphs,
+            node_successors_c,
+            subgraph_successors_c,
+        )
+    }
+
     /// \returns True if there is a path from \p 'from' to \p 'to'.
     pub fn is_reachable(&self, from: NodeHandle, to: NodeHandle) -> bool {
         if from == to {
@@ -478,14 +568,14 @@ impl DAG {
         self.is_reachable_inner(from, to, &mut visited)
     }
 
-    fn topological_sort_traverse_inner(
+    fn topological_sort_container(
         &self,
         subgraph_idx: SubgraphHandle,
-        node_successors_t: &Vec<Vec<TraverseHandle>>,
-        subgraph_successors_t: &Vec<Vec<TraverseHandle>>,
-    ) -> Vec<TraverseHandle> {
+        node_successors_c: &Vec<Vec<ContainerHandle>>,
+        subgraph_successors_c: &Vec<Vec<ContainerHandle>>,
+    ) -> Vec<ContainerHandle> {
         // A list of vectors in post-order.
-        let mut order: Vec<TraverseHandle> = Vec::new();
+        let mut order: Vec<ContainerHandle> = Vec::new();
 
         // Marks that a node is in the worklist.
         let mut visited_nodes = vec![false; self.nodes.len()];
@@ -495,19 +585,18 @@ impl DAG {
         // A tuple of handle, and command:
         // true- force push.
         // false- this is a child to visit.
-        let mut worklist: Vec<(TraverseHandle, bool)> = Vec::new();
+        let mut worklist: Vec<(ContainerHandle, bool)> = Vec::new();
 
         // Add all of the values that we want to compute into the worklist.
         for n in self.nesting_tree.subgraphs[subgraph_idx.idx].nodes.iter() {
-            worklist.push((TraverseHandle::Node(*n), false));
+            worklist.push((ContainerHandle::Node(*n), false));
         }
         for s in self.nesting_tree.subgraphs[subgraph_idx.idx]
             .subgraphs
             .iter()
         {
-            worklist.push((TraverseHandle::Subgraph(*s), false));
+            worklist.push((ContainerHandle::Subgraph(*s), false));
         }
-
         while let Some((current, cmd)) = worklist.pop() {
             // Handle 'push' commands.
             if cmd {
@@ -516,7 +605,7 @@ impl DAG {
             }
 
             match current {
-                TraverseHandle::Node(n) => {
+                ContainerHandle::Node(n) => {
                     // Don't visit visited nodes.
                     if visited_nodes[n.idx] {
                         continue;
@@ -528,19 +617,19 @@ impl DAG {
                     worklist.push((current, true));
 
                     // Add the children to the worklist.
-                    let succs = node_successors_t[n.idx].clone();
-                    // succs.reverse();
+                    let succs = node_successors_c[n.idx].clone();
+
                     for edge in succs.iter() {
                         worklist.push((edge.clone(), false));
                     }
                 }
-                TraverseHandle::Subgraph(s) => {
+                ContainerHandle::Subgraph(s) => {
                     if visited_subgraphs[s.idx] {
                         continue;
                     }
                     visited_subgraphs[s.idx] = true;
                     worklist.push((current, true));
-                    let succs = subgraph_successors_t[s.idx].clone();
+                    let succs = subgraph_successors_c[s.idx].clone();
                     for edge in succs.iter() {
                         worklist.push((edge.clone(), false));
                     }
@@ -552,76 +641,98 @@ impl DAG {
         order
     }
 
-    fn compute_successors_t(
+    fn compute_successors_c(
         &self,
-    ) -> (Vec<Vec<TraverseHandle>>, Vec<Vec<TraverseHandle>>) {
-        let mut node_predecessors_t = vec![Vec::new(); self.nodes.len()];
-        let mut subgraph_predecessors_t =
+    ) -> (
+        Vec<Vec<ContainerHandle>>,
+        Vec<Vec<ContainerHandle>>,
+        Vec<Vec<(NodeHandle, NodeHandle)>>,
+        Vec<Vec<(NodeHandle, NodeHandle)>>,
+    ) {
+        let mut node_successors_c = vec![Vec::new(); self.nodes.len()];
+        let mut subgraph_successors_c =
+            vec![Vec::new(); self.nesting_tree.subgraphs.len()];
+        let mut node_successors_pairs = vec![Vec::new(); self.nodes.len()];
+        let mut subgraph_successors_pairs =
             vec![Vec::new(); self.nesting_tree.subgraphs.len()];
 
         for (i, node) in self.nodes.iter().enumerate() {
             for succ in node.successors.iter() {
-                let (from_traverse, to_traverse) =
+                let (from_c, to_c) =
                     self.nesting_edge_pair(NodeHandle::new(i), *succ);
-                match from_traverse {
-                    TraverseHandle::Node(n) => {
-                        node_predecessors_t[n.idx].push(to_traverse);
+
+                if self.is_reachable_c(
+                    to_c.clone(),
+                    from_c.clone(),
+                    &node_successors_c,
+                    &subgraph_successors_c,
+                ) {
+                    continue;
+                }
+                match from_c {
+                    ContainerHandle::Node(n) => {
+                        node_successors_c[n.idx].push(to_c);
+                        node_successors_pairs[n.idx]
+                            .push((NodeHandle::new(i), *succ));
                     }
-                    TraverseHandle::Subgraph(s) => {
-                        subgraph_predecessors_t[s.idx].push(to_traverse);
+                    ContainerHandle::Subgraph(s) => {
+                        subgraph_successors_c[s.idx].push(to_c);
+                        subgraph_successors_pairs[s.idx]
+                            .push((NodeHandle::new(i), *succ));
                     }
                 }
             }
         }
-        (node_predecessors_t, subgraph_predecessors_t)
-    }
-    fn compute_predecessors_t(
-        &self,
-    ) -> (Vec<Vec<TraverseHandle>>, Vec<Vec<TraverseHandle>>) {
-        let mut node_predecessors_t = vec![Vec::new(); self.nodes.len()];
-        let mut subgraph_predecessors_t =
-            vec![Vec::new(); self.nesting_tree.subgraphs.len()];
-
-        for (i, node) in self.nodes.iter().enumerate() {
-            for pred in node.predecessors.iter() {
-                let (from_traverse, to_traverse) =
-                    self.nesting_edge_pair(*pred, NodeHandle::new(i));
-                match to_traverse {
-                    TraverseHandle::Node(n) => {
-                        node_predecessors_t[n.idx].push(from_traverse);
-                    }
-                    TraverseHandle::Subgraph(s) => {
-                        subgraph_predecessors_t[s.idx].push(from_traverse);
-                    }
-                }
-            }
-        }
-        (node_predecessors_t, subgraph_predecessors_t)
+        (
+            node_successors_c,
+            subgraph_successors_c,
+            node_successors_pairs,
+            subgraph_successors_pairs,
+        )
     }
 
-    pub fn topological_sort_traverse(&self) -> Vec<NodeHandle> {
-        let (node_successors_t, subgraph_successors_t) =
-            self.compute_successors_t();
+    pub fn compute_level_container(&self) -> Vec<usize> {
+        let mut levels: Vec<usize> = Vec::new();
+
+        // Levels has the same layout as the DAG node list.
+        levels.resize(self.nodes.len(), 0);
+
+        let (node_successors_c, subgraph_successors_c, node_s_pair, sg_s_pair) =
+            self.compute_successors_c();
         let subgraphs_num = self.num_subgraphs();
-        let mut traverse_orders = vec![vec![]; subgraphs_num];
-        for i in (0..subgraphs_num).rev() {
-            let order_t = self.topological_sort_traverse_inner(
-                SubgraphHandle::new(i),
-                &node_successors_t,
-                &subgraph_successors_t,
+        for s_idx in (0..subgraphs_num).rev() {
+            let order_c = self.topological_sort_container(
+                SubgraphHandle::new(s_idx),
+                &node_successors_c,
+                &subgraph_successors_c,
             );
-            let mut order_t_expanded = Vec::new();
-            for t in order_t {
-                match t {
-                    TraverseHandle::Node(n) => order_t_expanded.push(n),
-                    TraverseHandle::Subgraph(s) => {
-                        order_t_expanded.extend(traverse_orders[s.idx].iter());
+            for t in order_c {
+                let (edge_pairs, successors_c) = match t {
+                    ContainerHandle::Node(from) => {
+                        (&node_s_pair[from.idx], &node_successors_c[from.idx])
                     }
+                    ContainerHandle::Subgraph(from_s) => (
+                        &sg_s_pair[from_s.idx],
+                        &subgraph_successors_c[from_s.idx],
+                    ),
+                };
+                for (j, to_t) in successors_c.iter().enumerate() {
+                    let (from, to) = edge_pairs[j];
+                    self.level_offset_container(from, to, *to_t, &mut levels);
                 }
             }
-            traverse_orders[i] = order_t_expanded;
         }
-        traverse_orders[0].clone()
+        // assign connectors to be average of their end nodes
+        for (i, node) in self.nodes.iter().enumerate() {
+            if node.node_type == NodeType::Connector {
+                let pred = self.single_pred(NodeHandle::from(i)).unwrap();
+                let succ = self.single_succ(NodeHandle::from(i)).unwrap();
+                // round to nearest integer
+                let level = (levels[pred.idx] + levels[succ.idx]) / 2;
+                levels[i] = level;
+            }
+        }
+        levels
     }
 
     // The methods below are related to the rank (placing nodes in levels). //
@@ -709,9 +820,7 @@ impl DAG {
     /// Places all of the nodes in ranks (levels).
     pub fn recompute_node_ranks(&mut self) {
         assert!(!self.is_empty(), "Sorting an empty graph");
-        let order = self.topological_sort_traverse();
-        let mut levels = self.compute_levels(&order);
-        self.compactify_subgraph(&order, &mut levels);
+        let levels = self.compute_level_container();
         self.ranks.clear();
         for (i, level) in levels.iter().enumerate() {
             self.add_element_to_rank(NodeHandle::from(i), *level, false);
@@ -772,29 +881,44 @@ impl DAG {
         self.levels[node.get_index()]
     }
 
-    /// Computes and returns the level of each node in the graph based
-    /// on the traversal order \p order.
-    fn compute_levels(&self, order: &[NodeHandle]) -> Vec<usize> {
-        let mut levels: Vec<usize> = Vec::new();
-        assert_eq!(order.len(), self.nodes.len());
-
-        // Levels has the same layout as the DAG node list.
-        levels.resize(self.nodes.len(), 0);
-
-        // For each node in the order (starting with a node of level zero).
-        for src in order {
-            // Update the level of all successors.
-            for dest in self.nodes[src.idx].successors.iter() {
-                // Ignore self edges.
-                if src.idx == dest.idx {
-                    continue;
+    fn level_offset_container(
+        &self,
+        from: NodeHandle,
+        to: NodeHandle,
+        to_t: ContainerHandle,
+        levels: &mut Vec<usize>,
+    ) {
+        match to_t {
+            ContainerHandle::Node(n) => {
+                levels[n.idx] = cmp::max(levels[n.idx], levels[from.idx] + 1);
+            }
+            ContainerHandle::Subgraph(sg) => {
+                if levels[from.idx] + 1 <= levels[to.idx] {
+                    return;
                 }
-                levels[dest.idx] =
-                    cmp::max(levels[dest.idx], levels[src.idx] + 1);
+                let offset = (levels[from.idx] + 1) - levels[to.idx];
+                for n in self.nesting_tree.subgraphs[sg.idx].nodes.iter() {
+                    levels[n.idx] += offset;
+                }
+                let mut worklist = Vec::new();
+                for s in self.nesting_tree.subgraphs[sg.idx].subgraphs.iter() {
+                    worklist.push(*s);
+                }
+                while let Some(current) = worklist.pop() {
+                    for n in
+                        self.nesting_tree.subgraphs[current.idx].nodes.iter()
+                    {
+                        levels[n.idx] += offset;
+                    }
+                    for s in self.nesting_tree.subgraphs[current.idx]
+                        .subgraphs
+                        .iter()
+                    {
+                        worklist.push(*s);
+                    }
+                }
             }
         }
-
-        levels
     }
 
     pub(crate) fn place_horizontal_borders(
@@ -1029,6 +1153,35 @@ impl DAG {
         total_weight as f64 / total_count as f64
     }
 
+    fn find_endpoints_of_connectors(
+        &self,
+        node: NodeHandle,
+    ) -> (NodeHandle, NodeHandle) {
+        let mut pred = node;
+        let mut succ = node;
+        assert!(
+            self.nodes[node.idx].node_type == NodeType::Connector,
+            "Node {:?} is not a connector node",
+            node
+        );
+
+        while self.nodes[pred.idx].node_type == NodeType::Connector {
+            let p = self
+                .single_pred(pred)
+                .expect("Connector node has no predecessor, this is a bug.");
+            pred = p;
+        }
+
+        while self.nodes[succ.idx].node_type == NodeType::Connector {
+            let s = self
+                .single_succ(succ)
+                .expect("Connector node has no successor, this is a bug.");
+            succ = s;
+        }
+
+        (pred, succ)
+    }
+
     fn aggregate_position(&self) -> (Vec<f64>, Vec<f64>) {
         let subgraphs_num = self.num_subgraphs();
         let mut total_position = vec![(0, 0); subgraphs_num];
@@ -1043,6 +1196,7 @@ impl DAG {
                 position_nodes[node.idx] = j as f64;
             }
         }
+
         for i in (0..subgraphs_num).rev() {
             for j in self.nesting_tree.subgraphs[i].subgraphs.iter() {
                 total_position[i].0 += total_position[j.idx].0;
@@ -1060,6 +1214,23 @@ impl DAG {
                 }
             })
             .collect();
+
+        for (i, node) in self.nodes.iter().enumerate() {
+            if node.node_type == NodeType::Connector {
+                let (pred_n, succ_n) =
+                    self.find_endpoints_of_connectors(NodeHandle::new(i));
+                let (pred, succ) = self.nesting_edge_pair(pred_n, succ_n);
+                let p_pos = match pred {
+                    ContainerHandle::Node(n) => position_nodes[n.idx],
+                    ContainerHandle::Subgraph(s) => average_position[s.idx],
+                };
+                let s_pos = match succ {
+                    ContainerHandle::Node(n) => position_nodes[n.idx],
+                    ContainerHandle::Subgraph(s) => average_position[s.idx],
+                };
+                position_nodes[i] = (p_pos + s_pos) / 2.0;
+            }
+        }
 
         (average_position, position_nodes)
     }
@@ -1110,22 +1281,22 @@ impl DAG {
             self.aggregate_position_layerwise(layer_idx);
 
         let mut working_list =
-            vec![TraverseHandle::Subgraph(SubgraphHandle::new(0))];
+            vec![ContainerHandle::Subgraph(SubgraphHandle::new(0))];
         let mut output = vec![];
 
         while !working_list.is_empty() {
             let current = working_list.pop().unwrap();
             match current {
-                TraverseHandle::Node(n) => {
+                ContainerHandle::Node(n) => {
                     output.push(n);
                 }
-                TraverseHandle::Subgraph(s) => {
+                ContainerHandle::Subgraph(s) => {
                     let mut cur = vec![];
                     for s_child in
                         self.nesting_tree.subgraphs[s.idx].subgraphs.iter()
                     {
                         if let Some(_) = subgraph_pos_map[s_child.idx] {
-                            cur.push(TraverseHandle::Subgraph(*s_child));
+                            cur.push(ContainerHandle::Subgraph(*s_child));
                         }
                     }
 
@@ -1133,20 +1304,24 @@ impl DAG {
                         self.nesting_tree.subgraphs[s.idx].nodes.iter()
                     {
                         if let Some(_) = node_pos[n_child.idx] {
-                            cur.push(TraverseHandle::Node(*n_child));
+                            cur.push(ContainerHandle::Node(*n_child));
                         }
                     }
 
                     cur.sort_by(|a, b| {
                         let p_a = match a {
-                            TraverseHandle::Node(n) => node_pos[n.idx].unwrap(),
-                            TraverseHandle::Subgraph(sg) => {
+                            ContainerHandle::Node(n) => {
+                                node_pos[n.idx].unwrap()
+                            }
+                            ContainerHandle::Subgraph(sg) => {
                                 subgraph_pos_map[sg.idx].unwrap()
                             }
                         };
                         let p_b = match b {
-                            TraverseHandle::Node(n) => node_pos[n.idx].unwrap(),
-                            TraverseHandle::Subgraph(sg) => {
+                            ContainerHandle::Node(n) => {
+                                node_pos[n.idx].unwrap()
+                            }
+                            ContainerHandle::Subgraph(sg) => {
                                 subgraph_pos_map[sg.idx].unwrap()
                             }
                         };
@@ -1166,63 +1341,42 @@ impl DAG {
     pub(crate) fn subgraph_order_by_p(&mut self) -> Vec<NodeHandle> {
         let (subgraph_pos_map, node_pos) = self.aggregate_position();
         let mut working_list =
-            vec![TraverseHandle::Subgraph(SubgraphHandle::new(0))];
+            vec![ContainerHandle::Subgraph(SubgraphHandle::new(0))];
         let mut output = vec![];
 
         while !working_list.is_empty() {
             let current = working_list.pop().unwrap();
             match current {
-                TraverseHandle::Node(n) => {
+                ContainerHandle::Node(n) => {
                     output.push(n);
                 }
-                TraverseHandle::Subgraph(s) => {
+                ContainerHandle::Subgraph(s) => {
                     let mut cur = vec![];
-                    let mut connectors = vec![];
                     for s_child in
                         self.nesting_tree.subgraphs[s.idx].subgraphs.iter()
                     {
-                        cur.push(TraverseHandle::Subgraph(*s_child));
+                        cur.push(ContainerHandle::Subgraph(*s_child));
                     }
                     for n_child in
                         self.nesting_tree.subgraphs[s.idx].nodes.iter()
                     {
-                        match self.nodes[n_child.idx].node_type {
-                            NodeType::Connector => {
-                                let from = self.single_pred(*n_child).unwrap();
-                                let to = self.single_succ(*n_child).unwrap();
-                                let x = self.nesting_edge_pair(from, to);
-                                connectors.push((x, *n_child));
-                            }
-                            _ => {
-                                cur.push(TraverseHandle::Node(*n_child));
-                            }
-                        }
+                        cur.push(ContainerHandle::Node(*n_child));
                     }
-
                     cur.sort_by(|a, b| {
                         let p_a = match a {
-                            TraverseHandle::Node(n) => node_pos[n.idx],
-                            TraverseHandle::Subgraph(sg) => {
+                            ContainerHandle::Node(n) => node_pos[n.idx],
+                            ContainerHandle::Subgraph(sg) => {
                                 subgraph_pos_map[sg.idx]
                             }
                         };
                         let p_b = match b {
-                            TraverseHandle::Node(n) => node_pos[n.idx],
-                            TraverseHandle::Subgraph(sg) => {
+                            ContainerHandle::Node(n) => node_pos[n.idx],
+                            ContainerHandle::Subgraph(sg) => {
                                 subgraph_pos_map[sg.idx]
                             }
                         };
                         p_b.partial_cmp(&p_a).unwrap()
                     });
-
-                    connectors.sort_by(|a, b| a.1.idx.cmp(&b.1.idx));
-
-                    // insert connectors
-                    for c in connectors.iter() {
-                        let conn_1st_pos =
-                            cur.iter().position(|x| *x == c.0 .0).unwrap();
-                        cur.insert(conn_1st_pos, TraverseHandle::Node(c.1));
-                    }
 
                     for c in cur.into_iter() {
                         working_list.push(c);
@@ -1285,11 +1439,11 @@ impl DAG {
         path
     }
 
-    pub(crate) fn nesting_edge_pair(
+    fn nesting_edge_pair(
         &self,
         from: NodeHandle,
         to: NodeHandle,
-    ) -> (TraverseHandle, TraverseHandle) {
+    ) -> (ContainerHandle, ContainerHandle) {
         let from_path =
             self.subgraph_path(self.get_parent_subgraph_index_n(from));
         let to_path = self.subgraph_path(self.get_parent_subgraph_index_n(to));
@@ -1302,139 +1456,17 @@ impl DAG {
             i += 1;
         }
         let from_t = if i == from_path.len() {
-            TraverseHandle::Node(from)
+            ContainerHandle::Node(from)
         } else {
-            TraverseHandle::Subgraph(from_path[i])
+            ContainerHandle::Subgraph(from_path[i])
         };
 
         let to_t = if i == to_path.len() {
-            TraverseHandle::Node(to)
+            ContainerHandle::Node(to)
         } else {
-            TraverseHandle::Subgraph(to_path[i])
+            ContainerHandle::Subgraph(to_path[i])
         };
         (from_t, to_t)
-    }
-
-    fn compactify_subgraph(
-        &self,
-        order: &[NodeHandle],
-        levels: &mut Vec<usize>,
-    ) {
-        let (node_predecessors_t, subgraph_predecessors_t) =
-            self.compute_predecessors_t();
-        let subgraphs_num = self.nesting_tree.subgraphs.len();
-        // go through each subgraph and record the max level of its nodes with in subgraph predesosor that is also not connector
-        let mut subgraph_max_root_level = vec![0; subgraphs_num];
-        let mut subgraph_roots = vec![vec![]; subgraphs_num];
-        for (i, node) in self.nodes.iter().enumerate() {
-            // if node is a connector, skip
-            match node.node_type {
-                NodeType::Connector => {
-                    continue;
-                }
-                _ => {}
-            }
-            let subgraph_idx = node.get_parent_subgraph_index();
-            // let is_insubgraph_root = node.predecessors_t.is_empty();
-            let is_insubgraph_root = node_predecessors_t[i].is_empty();
-            if !is_insubgraph_root {
-                continue;
-            }
-            for pred in node.predecessors.iter() {
-                let pred_subgraph_idx =
-                    self.nodes[pred.idx].get_parent_subgraph_index();
-
-                if subgraph_idx != pred_subgraph_idx {
-                    subgraph_max_root_level[subgraph_idx.idx] = cmp::max(
-                        subgraph_max_root_level[subgraph_idx.idx],
-                        levels[i],
-                    );
-                    subgraph_roots[subgraph_idx.idx].push(NodeHandle::new(i));
-                }
-            }
-            if node.predecessors.is_empty() {
-                subgraph_roots[subgraph_idx.idx].push(NodeHandle::new(i));
-                subgraph_max_root_level[subgraph_idx.idx] = cmp::max(
-                    subgraph_max_root_level[subgraph_idx.idx],
-                    levels[i],
-                );
-            }
-        }
-        for i in 0..subgraphs_num - 1 {
-            let cur_idx = subgraphs_num - i - 1;
-            let cur_subgraph = &self.nesting_tree.subgraphs[cur_idx];
-            let parent_idx = cur_subgraph.parent_subgraph_idx.idx;
-            let is_subgraph_root = subgraph_predecessors_t[cur_idx].is_empty();
-            if is_subgraph_root {
-                subgraph_max_root_level[parent_idx] = cmp::max(
-                    subgraph_max_root_level[parent_idx],
-                    subgraph_max_root_level[cur_idx],
-                );
-                subgraph_max_root_level[cur_idx] =
-                    subgraph_max_root_level[parent_idx];
-                for r in subgraph_roots[cur_idx].clone() {
-                    subgraph_roots[parent_idx].push(r);
-                }
-            }
-        }
-
-        // now create a map from nodehandle idx to its accompanying subgraph root nodehandles (vec of nodehandles)
-        let mut subgraph_root_map = vec![vec![]; self.nodes.len()];
-        for root_nodes in subgraph_roots.iter().rev() {
-            for n in root_nodes {
-                let mut root_list = root_nodes.clone();
-                root_list.retain(|&x| x != *n);
-                subgraph_root_map[n.idx] = root_list;
-            }
-        }
-
-        let mut order_c = vec![];
-        for src in order {
-            if order_c.contains(src) {
-                continue;
-            }
-            order_c.push(*src);
-            for accompanying_root in subgraph_root_map[src.idx].iter() {
-                order_c.push(*accompanying_root);
-            }
-        }
-        let mut visited = vec![false; self.nodes.len()];
-
-        // For each node in the order (starting with a node of level zero).
-        for src in order_c.iter() {
-            for accompanying_root in subgraph_root_map[src.idx].iter() {
-                levels[src.idx] =
-                    cmp::max(levels[accompanying_root.idx], levels[src.idx]);
-            }
-            for accompanying_root in subgraph_root_map[src.idx].iter() {
-                levels[accompanying_root.idx] = levels[src.idx];
-            }
-            // Update the level of all successors.
-            for dest in self.nodes[src.idx].successors.iter() {
-                // Ignore self edges.
-                if src.idx == dest.idx {
-                    continue;
-                }
-                // pass if dest is before src in order_c
-                if visited[dest.idx] {
-                    continue;
-                }
-
-                levels[dest.idx] =
-                    cmp::max(levels[dest.idx], levels[src.idx] + 1);
-                // now to keep invariant of root subingraph nodes, if dest is a root node, update all its accompanying root nodes
-                for accompanying_root in subgraph_root_map[dest.idx].iter() {
-                    levels[dest.idx] = cmp::max(
-                        levels[accompanying_root.idx],
-                        levels[dest.idx],
-                    );
-                }
-                for accompanying_root in subgraph_root_map[dest.idx].iter() {
-                    levels[accompanying_root.idx] = levels[dest.idx];
-                }
-            }
-            visited[src.idx] = true;
-        }
     }
 }
 
@@ -1467,13 +1499,11 @@ fn test_simple_construction() {
 
     g.verify();
 
-    let order = g.topological_sort_traverse();
-    let levels = g.compute_levels(&order);
-    assert_eq!(order.len(), g.len());
+    let levels = g.compute_level_container();
     assert_eq!(levels.len(), g.len());
 
     for i in 0..g.len() {
-        println!("{}) node {},  level {}", i, order[i].idx, levels[i]);
+        println!("{}),  level {}", i, levels[i]);
     }
 }
 

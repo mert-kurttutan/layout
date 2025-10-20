@@ -47,7 +47,9 @@ impl DotParser {
         &mut self,
         is_subgraph: bool,
     ) -> Result<ast::Graph, String> {
-        let mut graph = ast::Graph::new("");
+        let mut graph = ast::Graph::new(
+            format!("{}_anonymous_{}", self.lexer.pos, self.lexer.pos).as_str(),
+        );
 
         // Handle the subgraph structure.
         if is_subgraph {
@@ -167,8 +169,9 @@ impl DotParser {
                         Result::Ok(ns)
                     }
                     Token::SubgraphKW => {
-                        let subgraph = self.parse_graph(true)?;
-                        Result::Ok(ast::Stmt::Subgraph(subgraph))
+                        let ns = ast::NodeStmt::new(id0);
+                        let ns = ast::Stmt::Node(ns);
+                        Result::Ok(ns)
                     }
                     _ => to_error("Unsupported token"),
                 }
@@ -200,7 +203,11 @@ impl DotParser {
             Token::OpenBrace => {
                 // Handle anonymous scopes:
                 self.lex();
-                let mut graph = ast::Graph::new("anonymous");
+                // let mut graph = ast::Graph::new("anonymous");
+                let mut graph = ast::Graph::new(
+                    format!("{}_anonymous_{}", self.lexer.pos, self.lexer.pos)
+                        .as_str(),
+                );
                 graph.list = self.parse_stmt_list()?;
                 Result::Ok(ast::Stmt::Subgraph(graph))
             }

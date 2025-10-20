@@ -246,27 +246,11 @@ impl<'a> RankOptimizer<'a> {
             let next_rank = self.dag.level(*elem);
             highest_next = highest_next.min(next_rank);
         }
-        // if the cur subgraph has no node with same subgraph, then dont move
-        // otherwise check how far we can go down with every rank having another node of same subgraph
-        let mut target_rank = curr_rank;
-        for new_rank in curr_rank..highest_next {
-            let mut found_in_subgraph = false;
-            for n in self.dag.row(new_rank).iter() {
-                let shares_subgraph =
-                    self.dag.is_inside_same_subgraph(node, *n);
-                if shares_subgraph && n.get_index() != node.get_index() {
-                    found_in_subgraph = true;
-                    break;
-                }
-            }
-            if !found_in_subgraph {
-                target_rank = new_rank;
-                break;
-            }
-            target_rank = new_rank;
+
+        if highest_next == 0 {
+            return false;
         }
-        // limit target rank so that it does destroy subgraph layout (fixed previously by compact subgraph)
-        target_rank = target_rank.min(max_level);
+        let target_rank = (highest_next - 1).min(max_level);
 
         // We found an opportunity to sink a node.
         if target_rank > curr_rank {
