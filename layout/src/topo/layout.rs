@@ -47,10 +47,10 @@ pub struct VisualGraph {
 }
 
 impl VisualGraph {
-    pub fn new(orientation: Orientation) -> Self {
+    pub fn new(orientation: Orientation, main_graph_selem: Element) -> Self {
         VisualGraph {
             nodes: Vec::new(),
-            subgraphs: vec![],
+            subgraphs: vec![main_graph_selem],
             edges: Vec::new(),
             self_edges: Vec::new(),
             dag: DAG::new(),
@@ -143,14 +143,7 @@ impl VisualGraph {
         from: NodeHandle,
         to: NodeHandle,
     ) -> NodeHandle {
-        let from_traverse = self.dag.nesting_edge_pair(from, to).0;
-        let conn_subgraph_idx = match from_traverse {
-            TraverseHandle::Node(n) => self.dag.get_parent_subgraph_index_n(n),
-            TraverseHandle::Subgraph(sg) => {
-                self.dag.get_parent_subgraph_index_sg(sg)
-            }
-        };
-        let res = self.dag.new_connector_node(conn_subgraph_idx);
+        let res = self.dag.new_connector_node(from, to);
         assert!(res.get_index() == self.nodes.len());
         self.nodes.push(elem);
         res
@@ -215,6 +208,10 @@ impl VisualGraph {
         disable_layout: bool,
         rb: &mut dyn RenderBackend,
     ) {
+        // pass if nodes are empty
+        if self.dag.is_empty() {
+            return;
+        }
         self.lower(disable_opt);
         sander::do_it(self);
         Placer::new(self).layout(disable_layout);
@@ -225,7 +222,7 @@ impl VisualGraph {
         #[cfg(feature = "log")]
         log::info!("Lowering a graph with {} nodes.", self.num_nodes());
         self.to_valid_dag();
-        // self.split_text_edges();
+        self.split_text_edges();
         self.split_long_edges(disable_optimizations);
 
         for elem in self.dag.iter() {
@@ -274,7 +271,7 @@ impl VisualGraph {
     /// This is the second step of graph canonicalization.
     pub fn split_text_edges(&mut self) {
         let mut edges = self.edges.clone();
-        //self.edge_list.clear();
+        self.edges.clear();
 
         for edge in edges.iter_mut() {
             let lst = &edge.1;
@@ -316,21 +313,7 @@ impl VisualGraph {
         if !disable_optimizations {
             RankOptimizer::new(&mut self.dag).optimize();
         }
-        // go thorugh all edges and reverse those with prev_level < curr_level
-        for edge in self.edges.iter_mut() {
-            let lst = &edge.1;
-            assert_eq!(lst.len(), 2);
-            let from = lst[0];
-            let to = lst[1];
-            let prev_level = self.dag.level(from);
-            let curr_level = self.dag.level(to);
-            if prev_level > curr_level {
-                edge.0 = edge.0.reverse();
-                edge.1 = vec![to, from];
-                self.dag.remove_edge(from, to);
-                self.dag.add_edge(to, from);
-            }
-        }
+
         let mut edges = self.edges.clone();
         self.edges.clear();
 
@@ -348,8 +331,7 @@ impl VisualGraph {
                 let curr_level = self.dag.level(curr);
 
                 // If the edges point to a lower rank then move on.
-                assert!(prev_level < curr_level, "Invalid edge");
-                if prev_level + 1 == curr_level {
+                if prev_level + 1 >= curr_level {
                     i += 1;
                     continue;
                 }

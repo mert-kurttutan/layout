@@ -346,20 +346,20 @@ impl GraphBuilder {
                 dir = Orientation::LeftToRight;
             }
         }
-        let mut vg = VisualGraph::new(dir);
-
-        // Keeps track of the newly created nodes and indexes them by name.
-        let mut node_map = HashMap::new();
-        let mut subgraph_map = HashMap::new();
-
         let element = GraphBuilder::get_subgraph_shape_from_attributes(
             dir,
             &self.main_graph.global_state,
         );
 
+        let mut vg = VisualGraph::new(dir, element);
+
+        // Keeps track of the newly created nodes and indexes them by name.
+        let mut node_map = HashMap::new();
+        let mut subgraph_map = HashMap::new();
+
         subgraph_map.insert(
             self.main_graph.name.clone(),
-            (Vec::new(), vg.add_subgraph(element, SubgraphHandle::new(0))),
+            (Vec::new(), SubgraphHandle::new(0)),
         );
 
         self.main_graph
