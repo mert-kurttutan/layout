@@ -3,7 +3,7 @@
 #[cfg(feature = "log")]
 use log;
 use std::fs::File;
-use std::io::{Error, Read, Seek, Write};
+use std::io::{Error, Write};
 
 pub fn save_to_file(filename: &str, content: &str) -> Result<(), Error> {
     let f = File::create(filename)?;
@@ -13,20 +13,36 @@ pub fn save_to_file(filename: &str, content: &str) -> Result<(), Error> {
     Result::Ok(())
 }
 
+/// When compiled to WASM, Graphviz is able to be configured with a `Map<ImageId, (Url, Width, Height)>`.
+///
+/// In `layout`, we pass the image URL directly into the image.
 pub(crate) fn get_image_size(filename: &str) -> Result<(u32, u32), Error> {
-    if let Ok(image_size) = get_png_size(filename) {
-        return Ok(image_size);
+    // Don't panic.
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _filename = filename; // suppress unused warning
+        return Ok((32, 32));
     }
 
-    // TODO: Add support for other image formats (e.g., JPEG, SVG) following graphviz specs
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if let Ok(image_size) = get_png_size(filename) {
+            return Ok(image_size);
+        }
 
-    Err(Error::new(
-        std::io::ErrorKind::InvalidData,
-        "Unsupported image format",
-    ))
+        // TODO: Add support for other image formats (e.g., JPEG, SVG) following graphviz specs
+
+        Err(Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Unsupported image format for file: {filename}"),
+        ))
+    }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn get_png_size(filename: &str) -> Result<(u32, u32), Error> {
+    use std::io::{Read, Seek};
+
     let mut f = File::open(filename)?;
     let mut signature = [0; 8];
 

@@ -255,6 +255,8 @@ pub(crate) struct TdAttr {
 pub(crate) struct Image {
     pub(crate) scale: Scale,
     pub(crate) source: String,
+    pub(crate) width: Option<f64>,
+    pub(crate) height: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -479,7 +481,9 @@ impl HtmlParser {
 
         let x = self.read_string();
         if let Token::Identifier(s) = x {
-            Token::TagAttr(attr_name.to_lowercase(), s.to_lowercase())
+            // We cannot lowercase the value here because base64-encoded images
+            // may contain uppercase characters.
+            Token::TagAttr(attr_name.to_lowercase(), s)
         } else {
             Token::Error(self.pos)
         }
@@ -856,6 +860,8 @@ impl Image {
     ) -> Result<Self, String> {
         let mut scale = Scale::False;
         let mut source = String::new();
+        let mut width = None;
+        let mut height = None;
         for (key, value) in tag_attr_list.iter() {
             match key.as_str() {
                 "scale" => {
@@ -868,24 +874,40 @@ impl Image {
                     }
                 }
                 "src" => source = value.clone(),
+                "width" => width = value.parse().ok(),
+                "height" => height = value.parse().ok(),
                 _ => {}
             }
         }
-        Ok(Self { scale, source })
+        Ok(Self {
+            scale,
+            source,
+            width,
+            height,
+        })
     }
 
     fn width(&self) -> f64 {
-        let size = get_image_size(&self.source).unwrap();
-        size.0 as f64
+        self.width.unwrap_or_else(|| {
+            let size = get_image_size(&self.source).unwrap();
+            size.0 as f64
+        })
     }
     fn height(&self) -> f64 {
-        let size = get_image_size(&self.source).unwrap();
-        size.1 as f64
+        self.height.unwrap_or_else(|| {
+            let size = get_image_size(&self.source).unwrap();
+            size.1 as f64
+        })
     }
 
     pub(crate) fn size(&self) -> Point {
-        let size = get_image_size(&self.source).unwrap();
-        Point::new(size.0 as f64, size.1 as f64)
+        self.width
+            .zip(self.height)
+            .map(|(width, height)| Point::new(width, height))
+            .unwrap_or_else(|| {
+                let size = get_image_size(&self.source).unwrap();
+                Point::new(size.0 as f64, size.1 as f64)
+            })
     }
 }
 
