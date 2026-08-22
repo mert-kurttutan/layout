@@ -3,13 +3,37 @@ use layout::core::geometry::Point;
 #[cfg(test)]
 mod tests {
 
+    use layout::backends::svg::SVGWriter;
     use layout::core::geometry::weighted_median;
+    use layout::gv::parser::ast::{DotString, Stmt};
     use layout::gv::record::parse_record_string;
     use layout::gv::record::print_record;
     use layout::gv::DotParser;
+    use layout::gv::GraphBuilder;
     use layout::gv::Lexer;
     use layout::gv::Token;
     use layout::std_shapes::shapes::RecordDef;
+
+    fn parse_dot(program: &str) -> layout::gv::parser::ast::Graph {
+        let mut parser = DotParser::new(program);
+        match parser.process() {
+            Ok(graph) => graph,
+            Err(err) => {
+                parser.print_error();
+                panic!("Failed to parse program: {}", err);
+            }
+        }
+    }
+
+    fn render_dot(program: &str) -> String {
+        let graph = parse_dot(program);
+        let mut builder = GraphBuilder::new();
+        builder.visit_graph(&graph);
+        let mut visual_graph = builder.get();
+        let mut svg = SVGWriter::new();
+        visual_graph.do_it(false, false, false, &mut svg);
+        svg.finalize()
+    }
 
     fn is_identifier(t: Token, target: &str) -> bool {
         match t {
@@ -177,6 +201,121 @@ mod tests {
             return;
         }
         panic!();
+    }
+
+    #[test]
+    fn parse_html_node_label_with_entities() {
+        let graph = parse_dot(r#"digraph { a [label=<A &amp; B &lt; C>]; }"#);
+        let node = graph
+            .list
+            .list
+            .iter()
+            .find_map(|stmt| match stmt {
+                Stmt::Node(node) => Some(node),
+                _ => None,
+            })
+            .expect("expected node statement");
+        let label = node
+            .list
+            .iter()
+            .find(|(key, _)| key == "label")
+            .expect("expected node label");
+
+        match &label.1 {
+            DotString::HtmlString(value) => {
+                assert_eq!(value, "A &amp; B &lt; C");
+            }
+            other => panic!("expected HTML label, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_html_edge_labels() {
+        let graph = parse_dot(
+            r#"digraph {
+                a -> b [
+                    label=<edge <B>label</B>>,
+                    headlabel=<head>,
+                    taillabel=<tail>
+                ];
+            }"#,
+        );
+        let edge = graph
+            .list
+            .list
+            .iter()
+            .find_map(|stmt| match stmt {
+                Stmt::Edge(edge) => Some(edge),
+                _ => None,
+            })
+            .expect("expected edge statement");
+
+        for attr_name in ["label", "headlabel", "taillabel"] {
+            let attr = edge
+                .list
+                .iter()
+                .find(|(key, _)| key == attr_name)
+                .unwrap_or_else(|| panic!("expected {}", attr_name));
+            assert!(
+                matches!(attr.1, DotString::HtmlString(_)),
+                "expected {} to be parsed as HTML",
+                attr_name
+            );
+        }
+    }
+
+    #[test]
+    fn parse_html_table_with_ports_and_rules() {
+        parse_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+                        <TR><TD PORT="left">left</TD><VR/><TD PORT="right">right</TD></TR>
+                        <HR/>
+                        <TR><TD COLSPAN="2">bottom</TD></TR>
+                    </TABLE>
+                >];
+                b [label="target"];
+                a:right -> b;
+            }"#,
+        );
+    }
+
+    #[test]
+    fn render_html_plain_shape_table() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+                        <TR><TD>left</TD><TD>right</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("<rect"));
+        assert!(svg.contains(">left</tspan>"));
+        assert!(svg.contains(">right</tspan>"));
+        assert!(!svg.contains("<ellipse"));
+    }
+
+    #[test]
+    fn render_html_image_label() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="1" CELLBORDER="1">
+                        <TR><TD><IMG SRC="docs/sample.png" SCALE="TRUE"/></TD></TR>
+                        <TR><TD>caption</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains("<image"));
+        assert!(svg.contains("href=\"docs/sample.png\""));
+        assert!(svg.contains(">caption</tspan>"));
     }
 
     #[test]
