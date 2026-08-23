@@ -90,6 +90,16 @@ pub fn get_shape_size(
             get_size_for_content(text, font),
             BOX_SHAPE_PADDING,
         ),
+        ShapeKind::Frame(label) => {
+            if let Some(label) = label {
+                pad_shape_scalar(
+                    get_size_for_content(label, font),
+                    BOX_SHAPE_PADDING,
+                )
+            } else {
+                Point::new(1., 1.)
+            }
+        }
     };
     if make_xy_same {
         res = make_size_square(res);
@@ -716,6 +726,27 @@ impl Renderable for Element {
                     );
                 }
             }
+            ShapeKind::Frame(label) => {
+                canvas.draw_rect(
+                    self.pos.bbox(false).0,
+                    self.pos.size(false),
+                    &self.look,
+                    self.properties.clone(),
+                    Option::None,
+                );
+                if let Some(label) = label {
+                    let text_size = content_size(label, self.look.font_size);
+                    let text_pos = Point::new(
+                        self.pos.middle().x,
+                        self.pos.bbox(false).0.y
+                            + text_size.y / 2.
+                            + BORDER_PADDING / 2.,
+                    );
+                    draw_shape_content(
+                        label, text_pos, text_size, &self.look, canvas,
+                    );
+                }
+            }
         }
         if debug {
             canvas.draw_circle(
@@ -869,6 +900,12 @@ impl Renderable for Element {
                     }
                 }
             }
+            ShapeKind::Frame(_) => get_connection_point_for_box(
+                self.pos.center(),
+                self.pos.size(false),
+                from,
+                force,
+            ),
             _ => {
                 unreachable!();
             }

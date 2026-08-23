@@ -12,6 +12,7 @@ use crate::std_shapes::render::get_shape_size;
 
 const PADDING: f64 = 60.;
 const CONN_PADDING: f64 = 10.;
+pub(crate) const BORDER_PADDING: f64 = 5.;
 
 #[derive(Debug, Copy, Clone)]
 pub enum LineEndKind {
@@ -50,6 +51,7 @@ pub enum ShapeKind {
     DoubleCircle(ShapeContent),
     Record(RecordDef),
     Connector(Option<ShapeContent>),
+    Frame(Option<ShapeContent>),
 }
 
 impl ShapeKind {
@@ -144,6 +146,40 @@ impl Element {
                 Point::zero(),
                 Point::zero(),
                 Point::splat(CONN_PADDING),
+            ),
+            properties: Option::None,
+        }
+    }
+
+    pub fn create_subgraph(
+        orientation: Orientation,
+        label: Option<ShapeContent>,
+        look: &StyleAttr,
+    ) -> Element {
+        Element {
+            shape: ShapeKind::Frame(label),
+            look: look.clone(),
+            orientation,
+            pos: Position::new(
+                Point::new(25., 25.),
+                Point::new(20., 20.),
+                Point::new(25., 25.),
+                Point::splat(PADDING),
+            ),
+            properties: Option::None,
+        }
+    }
+
+    pub fn create_border() -> Element {
+        Element {
+            shape: ShapeKind::None(ShapeContent::String(String::new())),
+            look: StyleAttr::simple(),
+            orientation: Orientation::TopToBottom,
+            pos: Position::new(
+                Point::zero(),
+                Point::zero(),
+                Point::zero(),
+                Point::splat(BORDER_PADDING),
             ),
             properties: Option::None,
         }

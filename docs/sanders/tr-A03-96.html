@@ -1,0 +1,2133 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8"/>
+ </head>
+ <body>
+  <h1 data-block-id="/page/0/SectionHeader/0">
+   Layout of Compound Directed Graphs
+  </h1>
+  <p data-block-id="/page/0/Text/1">
+   Technical Report A/03/96
+  </p>
+  <p data-block-id="/page/0/Text/2">
+   Georg Sander
+   <br/>
+   (
+   <code>
+    sander@cs.uni-sb.de
+   </code>
+   )
+  </p>
+  <p data-block-id="/page/0/Text/3">
+   Universität des Saarlandes,
+   <br/>
+   FB 14 Informatik,
+   <br/>
+   66041 Saarbrücken
+  </p>
+  <p data-block-id="/page/0/Text/4">
+   June 5, 1996
+  </p>
+  <p data-block-id="/page/0/Text/5">
+   <b>
+    Abstract:
+   </b>
+   We present a method for the layout of compound directed graphs that is based on the hierarchical layer layout method. Our method has similarities with the method of Sugiyama and Misue [7] but gives different results: It uses a global partitioning into layers and tries to produce placements of nodes such that border rectangles can be drawn around the nodes of each subgraph. The method is implemented in the VCG tool.
+  </p>
+  <h2 data-block-id="/page/1/SectionHeader/0">
+   1 Introduction
+  </h2>
+  <p data-block-id="/page/1/Text/1">
+   Compound graphs are graphs where nodes are grouped into nested subgraphs. Compound graphs are useful in many situations. For instance, in interprocedural control flow diagrams, the nodes of each procedure should be grouped together, and in circuit diagrams, the elements of each module should be surrounded by rectangles indicating its borders.
+  </p>
+  <p data-block-id="/page/1/Text/2">
+   There are still not many layout algorithms for compound graphs. Most algorithms recursively deal with subgraphs as large nodes [4, 3] but ignore the global connectivity: Each subgraph is laid out independently which may result in too much edge crossings, if there are edges going beyond the borders of subgraphs. Other methods are restricted to planar graphs [2].
+  </p>
+  <p data-block-id="/page/1/Text/3">
+   We present a layout method for general directed compound graphs that is based on layout in layers [8, 1]. A similar method was presented by Sugiyama and Misue [7]. There, a
+   <i>
+    proper compound digraph
+   </i>
+   is constructed where each subgraph consists of local layers. Different to that, we use a global partitioning into layers and try to produce placements of the nodes within the layers such that border rectangles can be drawn around the nodes of each subgraph afterwards. Thus, we consider our method rather as an alternative to [7] than as an extension of [7].
+  </p>
+  <h2 data-block-id="/page/1/SectionHeader/4">
+   2 General Notation
+  </h2>
+  <p data-block-id="/page/1/Text/5">
+   A
+   <i>
+    simple directed graph
+   </i>
+   <math>
+    G = (V, E)
+   </math>
+   consists of the set of nodes
+   <math>
+    V
+   </math>
+   and the set of edges
+   <math>
+    E \subseteq V \times V
+   </math>
+   . The set
+   <math>
+    \mathbf{pred}(v) = \{w \in V | (w, v) \in E\}
+   </math>
+   contains the
+   <i>
+    direct predecessors
+   </i>
+   , the set
+   <math>
+    \mathbf{succ}(v) = \{w \in V | (v, w) \in E\}
+   </math>
+   contains the
+   <i>
+    direct successors
+   </i>
+   of a node
+   <math>
+    v
+   </math>
+   . We write
+   <math>
+    v \xrightarrow{G} w
+   </math>
+   for an edge
+   <math>
+    (v, w) \in E
+   </math>
+   and
+   <math>
+    v \xrightarrow{G^*} w
+   </math>
+   for a (potentially empty) sequence of edges
+   <math>
+    v \xrightarrow{G} v_1 \xrightarrow{G} \dots \xrightarrow{G} v_n \xrightarrow{G} w
+   </math>
+   (a
+   <i>
+    path
+   </i>
+   ). A
+   <i>
+    cycle
+   </i>
+   is a nonempty path
+   <math>
+    v \xrightarrow{G^*} v
+   </math>
+   . If a simple graph does not contain cycles, we call it
+   <i>
+    acyclic
+   </i>
+   or
+   <i>
+    DAG
+   </i>
+   . A
+   <i>
+    tree
+   </i>
+   is a DAG
+   <math>
+    T = (V, E)
+   </math>
+   consisting of
+   <math>
+    n
+   </math>
+   nodes and
+   <math>
+    n - 1
+   </math>
+   edges which has a special root node
+   <math>
+    r \in V
+   </math>
+   with
+   <math>
+    r \xrightarrow{T^*} v
+   </math>
+   for each
+   <math>
+    v \in V
+   </math>
+   . The
+   <i>
+    leaves
+   </i>
+   <math>
+    v
+   </math>
+   of a tree have the property
+   <math>
+    \mathbf{succ}(v) = \emptyset
+   </math>
+   . All other nodes except the leaves are called
+   <i>
+    inner nodes
+   </i>
+   of the tree.
+  </p>
+  <p data-block-id="/page/1/Text/6">
+   A
+   <i>
+    compound graph
+   </i>
+   <math>
+    G = (G', T')
+   </math>
+   consists of a simple directed graph
+   <math>
+    G' = (B \cup S, E_G)
+   </math>
+   and a tree
+   <math>
+    T' = (B \cup S, E_T)
+   </math>
+   (Fig. 1). The set
+   <math>
+    B
+   </math>
+   contains the leaves of
+   <math>
+    T'
+   </math>
+   which are called
+   <i>
+    base nodes
+   </i>
+   , and the set
+   <math>
+    S
+   </math>
+   contains the inner nodes of
+   <math>
+    T'
+   </math>
+   which are called
+   <i>
+    subgraphs
+   </i>
+   . In a compound graph,
+   <math>
+    G'
+   </math>
+   represents a connectivity relation between the base nodes and subgraphs.
+   <math>
+    T'
+   </math>
+   represents a nesting relation: subgraphs may contain other subgraphs or base nodes. We say
+   <math>
+    v
+   </math>
+   <i>
+    belongs to
+   </i>
+   <math>
+    u \in S
+   </math>
+   iff
+   <math>
+    u \xrightarrow{T^*} v
+   </math>
+   .
+  </p>
+  <p data-block-id="/page/1/Text/7">
+   Remark: a compound graph is not recursively defined as a graph whose nodes might be graphs whose nodes might be graphs etc. There, we would only allow connectivity edges between nodes at the same nesting level. The notion
+   <i>
+    compound graph
+   </i>
+   is more general because it may contain connectivity edges that cross the borders of nested subgraphs.
+  </p>
+  <div data-block-id="/page/2/Diagram/0">
+   <img alt="Connectivity relation G' showing nodes G, E, F, H, D, B, A, C and their connections to subgraphs Graph 1.1, Graph 1.2, Graph 1.1.1, Graph 1.1.2, and Graph 1." src="b230b8f21d8e82d55c0d311c8c32ef73_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <p>
+     Diagram illustrating the connectivity relation
+     <math>
+      G'
+     </math>
+     . It shows nodes G, E, F, H, D, B, A, C and their connections to subgraphs Graph 1.1, Graph 1.2, Graph 1.1.1, Graph 1.1.2, and Graph 1. The connections are: G to E, E to F, F to H, D to Graph 1.1, B to A, A to C, Graph 1.1 to Graph 1.2.1, Graph 1.1 to Graph 1.1.2, and Graph 1.2 to Graph 1.2.
+    </p>
+    <div class="img-alt">
+     Connectivity relation G' showing nodes G, E, F, H, D, B, A, C and their connections to subgraphs Graph 1.1, Graph 1.2, Graph 1.1.1, Graph 1.1.2, and Graph 1.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/2/Caption/1">
+   Connectivity relation
+   <math>
+    G'
+   </math>
+  </p>
+  <div data-block-id="/page/2/Diagram/2">
+   <img alt="Nesting relation T' showing a hierarchical structure of subgraphs Graph 1, Graph 1.1, Graph 1.2, Graph 1.1.1, Graph 1.1.2, Graph 1.2.1, and Graph 1.2.1." src="7055f51feb10ea4ea48b27c36f085286_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <p>
+     Diagram illustrating the nesting relation
+     <math>
+      T'
+     </math>
+     . It shows a hierarchical structure of subgraphs: Graph 1 (root) contains Graph 1.1 and Graph 1.2. Graph 1.1 contains Graph 1.1.1 and Graph 1.1.2. Graph 1.2 contains Graph 1.2.1 and Graph 1.2.2. Graph 1.1.1 contains A, Graph 1.1.2 contains B and C, Graph 1.2.1 contains E and F, and Graph 1.2.2 contains G and H.
+    </p>
+    <div class="img-alt">
+     Nesting relation T' showing a hierarchical structure of subgraphs Graph 1, Graph 1.1, Graph 1.2, Graph 1.1.1, Graph 1.1.2, Graph 1.2.1, and Graph 1.2.1.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/2/Caption/3">
+   Nesting relation
+   <math>
+    T'
+   </math>
+  </p>
+  <div data-block-id="/page/2/Diagram/4">
+   <img alt="Layout of the compound graph showing the visual representation of the nesting relation T' with nested rectangles and connectivity edges." src="163688ca8da9787f5d48edd68d8cc75b_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <p>
+     Diagram illustrating the layout of the compound graph. It shows the visual representation of the nesting relation
+     <math>
+      T'
+     </math>
+     with nested rectangles representing subgraphs. The root Graph 1 contains Graph 1.1 and Graph 1.2. Graph 1.1 contains Graph 1.1.1 and Graph 1.1.2. Graph 1.2 contains Graph 1.2.1 and Graph 1.2.2. Connectivity edges are shown as arrows between nodes within the subgraphs.
+    </p>
+    <div class="img-alt">
+     Layout of the compound graph showing the visual representation of the nesting relation T' with nested rectangles and connectivity edges.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/2/Caption/5">
+   Layout of the compound graph
+  </p>
+  <p data-block-id="/page/2/Caption/6">
+   Figure 1: Compound Graph
+  </p>
+  <h2 data-block-id="/page/2/SectionHeader/7">
+   3 Layout Conventions
+  </h2>
+  <p data-block-id="/page/2/Text/8">
+   The aim is to visualize the connectivity relation by arrows and the nesting relation by nested border rectangles. These show which nodes and subgraphs belong to the same subgraph. We use the following layout conventions: (a) Base nodes are partitioned into layers. All nodes of the same layer have (nearly) the same
+   <math>
+    y
+   </math>
+   -coordinate. (b) Base nodes do not overlap edges or other base nodes. (c) Connectivity edges may have bend points or may cross each other, but we try to avoid bend points and crossings when possible. (d) Connectivity edges should be uniformly oriented when possible (e.g., top down). If the graph is cyclic, it is not always possible. (e) A border rectangle of a subgraph
+   <math>
+    u
+   </math>
+   contains exactly the base nodes and the rectangles of subgraphs that belong to
+   <math>
+    u
+   </math>
+   . (f) The border rectangles of two nonnested subgraphs do not overlap. (g) Connectivity edges may cross border lines, but we try to avoid such crossings when possible.
+  </p>
+  <p data-block-id="/page/2/Text/9">
+   The layout algorithm to satisfy these conventions is a variant of the hierarchical method of layout in layers [8, 1]. First, we partition the base nodes into layers. Here we must consider conventions (a), (d) and (g). Connectivity edges crossing several layers are split into sequences of dummy nodes and short edges. The result is a
+   <i>
+    proper hierarchy
+   </i>
+   where all connectivity edges are between adjacent layers. Next, we reorder the base nodes and dummy nodes within the layers such that the result has few crossings. Here we must consider conventions (c), (e) and (f). Finally, we calculate the absolute coordinates of
+  </p>
+  <p data-block-id="/page/3/Text/0">
+   the base nodes, dummy nodes and the border rectangles (considering conventions (b), (e) and (f)) and draw the edges as line sequences between the dummy nodes.
+  </p>
+  <h2 data-block-id="/page/3/SectionHeader/1">
+   4 Partitioning into Layers
+  </h2>
+  <p data-block-id="/page/3/Text/2">
+   Layers are numbered top down. The uppermost layer has the number 1. The task is to calculate ranks
+   <math>
+    \mathbf{R}(v) \in \mathbb{N}
+   </math>
+   for all base nodes indicating the layer
+   <math>
+    v
+   </math>
+   belongs to. Connectivity edges should preferably point top down. A subgraph
+   <math>
+    u
+   </math>
+   has an upper border with rank
+   <math>
+    \mathbf{R}_{min}(u)
+   </math>
+   and a lower border with rank
+   <math>
+    \mathbf{R}_{max}(u)
+   </math>
+   . The nesting conventions imply the following rule:
+  </p>
+  <ul data-block-id="/page/3/ListGroup/3" style="list-style-type: none">
+   <li>
+    • If a bordering rectangle of a subgraph
+    <math>
+     u
+    </math>
+    is above (or below, resp.) another base node or subgraph
+    <math>
+     w
+    </math>
+    then all nodes
+    <math>
+     v
+    </math>
+    belonging to
+    <math>
+     u
+    </math>
+    are automatically above (or below, resp.)
+    <math>
+     w
+    </math>
+    .
+   </li>
+  </ul>
+  <p data-block-id="/page/3/Text/4">
+   This influences the partitioning. Example: Let
+   <math>
+    G = (G', T')
+   </math>
+   be a compound graph, let two subgraphs
+   <math>
+    u_1
+   </math>
+   and
+   <math>
+    u_2
+   </math>
+   be nonnested, let the base node
+   <math>
+    v_1
+   </math>
+   belong to
+   <math>
+    u_1
+   </math>
+   and
+   <math>
+    v_2
+   </math>
+   belong to
+   <math>
+    u_2
+   </math>
+   . If two edges
+   <math>
+    (u_1, u_2) \in E_G
+   </math>
+   and
+   <math>
+    (v_2, v_1) \in E_G
+   </math>
+   exist, then one of these must be reverted, i.e., it points converse to the uniform edge orientation, although
+   <math>
+    G' = (B \cup S, E_G)
+   </math>
+   does not contain a cycle. The combination
+   <math>
+    (B \cup S, E_G \cup E_T)
+   </math>
+   contains the cycle. On the other hand, if
+   <math>
+    (v_1, u_1) \in E_G
+   </math>
+   exist, then the combination
+   <math>
+    (B \cup S, E_G \cup E_T)
+   </math>
+   contains the cycle
+   <math>
+    v_1 \xrightarrow{G'} u_1 \xrightarrow{T'} v_1
+   </math>
+   but the edge
+   <math>
+    (v_1, u_1)
+   </math>
+   need not to be reverted. It may point to the lower border of the rectangle of
+   <math>
+    u_1
+   </math>
+   .
+  </p>
+  <p data-block-id="/page/3/Text/5">
+   <b>
+    Definition 1
+   </b>
+   A legal rank assignment consists of numberings
+   <math>
+    \mathbf{R} : B \rightarrow \mathbb{N}
+   </math>
+   ,
+   <math>
+    \mathbf{R}_{min} : S \rightarrow \mathbb{N}
+   </math>
+   , and
+   <math>
+    \mathbf{R}_{max} : S \rightarrow \mathbb{N}
+   </math>
+   , where
+  </p>
+  <ol data-block-id="/page/3/ListGroup/6" style="list-style-type: none">
+   <li>
+    (1)
+    <math>
+     \mathbf{R}_{min}(u) &lt; \mathbf{R}_{max}(u)
+    </math>
+    for all
+    <math>
+     u \in S
+    </math>
+    .
+   </li>
+   <li>
+    (2)
+    <math>
+     \mathbf{R}_{min}(u) &lt; \mathbf{R}(v) &lt; \mathbf{R}_{max}(u)
+    </math>
+    for all
+    <math>
+     u \in S
+    </math>
+    ,
+    <math>
+     v \in B
+    </math>
+    with
+    <math>
+     u \xrightarrow{T'} v
+    </math>
+    .
+   </li>
+   <li>
+    (3)
+    <math>
+     \mathbf{R}_{min}(u_1) &lt; \mathbf{R}_{min}(u_2) &lt; \mathbf{R}_{max}(u_2) &lt; \mathbf{R}_{max}(u_1)
+    </math>
+    for all
+    <math>
+     u_1, u_2 \in S
+    </math>
+    with
+    <math>
+     u_1 \xrightarrow{T'} u_2
+    </math>
+    .
+   </li>
+  </ol>
+  <p data-block-id="/page/3/Text/7">
+   To calculate the positions of the upper and lower borders of rectangles, we simply introduce two dummy nodes
+   <math>
+    u^{(-)}
+   </math>
+   and
+   <math>
+    u^{(+)}
+   </math>
+   for each subgraph
+   <math>
+    u
+   </math>
+   and assign ranks to them. We call them
+   <i>
+    border nodes
+   </i>
+   . Then, we define
+   <math>
+    \mathbf{R}_{min}(u) = \mathbf{R}(u^{(-)})
+   </math>
+   and
+   <math>
+    \mathbf{R}_{max}(u) = \mathbf{R}(u^{(+)})
+   </math>
+   , i.e., the upper (or lower, resp.) border of the rectangle is drawn in the layer that contains
+   <math>
+    u^{(-)}
+   </math>
+   (or
+   <math>
+    u^{(+)}
+   </math>
+   , resp.). Since the borders of rectangles are usually much thinner than base nodes, we do not mix base nodes and border nodes within the layers. Layers either contain only border nodes or only base nodes. Between two layers of base nodes, there may be at most
+   <math>
+    2k
+   </math>
+   layers with border nodes where
+   <math>
+    k
+   </math>
+   is the depth of the tree
+   <math>
+    T'
+   </math>
+   . Thus, we assign multiples of
+   <math>
+    2k+1
+   </math>
+   as ranks to the base nodes while all other layers are reserved for border nodes (Fig. 2, left). After the partitioning, empty layers are removed.
+  </p>
+  <div data-block-id="/page/4/Diagram/0">
+   <img alt="Figure 2: Layer Assignment and Nesting Graph. The figure consists of three parts: 'Nested graph', 'Layer partitioning', and 'Nesting graph'. The 'Nested graph' shows a tree structure with nodes labeled a, b, c, d, e, f. The 'Layer partitioning' part shows nodes grouped into layers: a^{(-)}, e^{(-)}, b^{(-)}, f^{(-)} in the top layer (Nr. 2k+1), and d^{(+)}, d^{(-)}, c^{(+)} in the middle layer (Nr. 2(2k+1)). The 'Nesting graph' shows a directed graph with nodes representing the layers, divided into an 'upper nesting tree' and a 'lower nesting tree'." src="f9a14fbfecbd7d059226cc93677d721b_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <div class="img-alt">
+     Figure 2: Layer Assignment and Nesting Graph. The figure consists of three parts: 'Nested graph', 'Layer partitioning', and 'Nesting graph'. The 'Nested graph' shows a tree structure with nodes labeled a, b, c, d, e, f. The 'Layer partitioning' part shows nodes grouped into layers: a^{(-)}, e^{(-)}, b^{(-)}, f^{(-)} in the top layer (Nr. 2k+1), and d^{(+)}, d^{(-)}, c^{(+)} in the middle layer (Nr. 2(2k+1)). The 'Nesting graph' shows a directed graph with nodes representing the layers, divided into an 'upper nesting tree' and a 'lower nesting tree'.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/4/Caption/1">
+   Figure 2: Layer Assignment and Nesting Graph
+  </p>
+  <div data-block-id="/page/4/Diagram/2">
+   <img alt="Figure 3: Extended Nesting Graph and Border Correction. The figure shows three stages: 'Extended nesting graph' which adds more nodes and edges to the nesting graph; 'Corresponding compound graph' which maps the extended nesting graph to a compound graph structure; and 'Correction of upper border nodes' which shows a series of diagrams illustrating how the upper border nodes are adjusted to form a proper nesting structure." src="e394c2b5c61344f6a12397f430086072_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <div class="img-alt">
+     Figure 3: Extended Nesting Graph and Border Correction. The figure shows three stages: 'Extended nesting graph' which adds more nodes and edges to the nesting graph; 'Corresponding compound graph' which maps the extended nesting graph to a compound graph structure; and 'Correction of upper border nodes' which shows a series of diagrams illustrating how the upper border nodes are adjusted to form a proper nesting structure.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/4/Caption/3">
+   Figure 3: Extended Nesting Graph and Border Correction
+  </p>
+  <p data-block-id="/page/4/Text/4">
+   <b>
+    Definition 2
+   </b>
+   The
+   <b>
+    nesting graph
+   </b>
+   of a compound graph
+   <math>
+    (G', T')
+   </math>
+   consists of
+  </p>
+  <ol data-block-id="/page/4/ListGroup/5" style="list-style-type: none">
+   <li>
+    (1) the set of nodes
+    <math>
+     B \cup \{u^{(-)} \mid u \in S\} \cup \{u^{(+)} \mid u \in S\}
+    </math>
+    ,
+   </li>
+   <li>
+    (2) an edge
+    <math>
+     (u^{(-)}, v)
+    </math>
+    for each
+    <math>
+     (u, v) \in E_T
+    </math>
+    with
+    <math>
+     u \in S, v \in B
+    </math>
+    ,
+   </li>
+   <li>
+    (3) an edge
+    <math>
+     (u_1^{(-)}, u_2^{(-)})
+    </math>
+    for each
+    <math>
+     (u_1, u_2) \in E_T
+    </math>
+    with
+    <math>
+     u_1, u_2 \in S
+    </math>
+    ,
+   </li>
+   <li>
+    (4) an edge
+    <math>
+     (v, u^{(+)})
+    </math>
+    for each
+    <math>
+     (u, v) \in E_T
+    </math>
+    with
+    <math>
+     u \in S, v \in B
+    </math>
+    ,
+   </li>
+   <li>
+    (5) an edge
+    <math>
+     (u_2^{(+)}, u_1^{(+)})
+    </math>
+    for each
+    <math>
+     (u_1, u_2) \in E_T
+    </math>
+    with
+    <math>
+     u_1, u_2 \in S
+    </math>
+    .
+   </li>
+  </ol>
+  <p data-block-id="/page/4/Text/6">
+   We call the edges of the nesting graph
+   <b>
+    nesting edges
+   </b>
+   .
+  </p>
+  <p data-block-id="/page/4/Text/7">
+   The nesting graph consists conceptually of two copies of the nesting tree
+   <math>
+    T'
+   </math>
+   that are fused at the leaves. In the upper copy, the nodes
+   <math>
+    u^{(-)}
+   </math>
+   are used. In the lower copy, the nodes
+   <math>
+    u^{(+)}
+   </math>
+   are used and the edges are reverted such that all paths point to the copy
+   <math>
+    r^{(+)}
+   </math>
+   of the root
+   <math>
+    r \in T'
+   </math>
+   (Fig. 2, right). The nesting graph is acyclic.
+  </p>
+  <p data-block-id="/page/4/Text/8">
+   <b>
+    Theorem 1
+   </b>
+   If we traverse the nesting graph in topological order and calculate
+   <math>
+    \mathbf{R}(v) = \max\{\mathbf{R}(w) \mid w \in \text{pred}(v)\} + 1
+   </math>
+   , then this produces a legal rank assignment.
+  </p>
+  <p data-block-id="/page/5/Text/0">
+   This even holds, if we add edges to the nesting graph but keep it acyclic. Thus, we successively add the following edges of
+   <math>
+    E_G
+   </math>
+   to the nesting graph if they do not produce cycles (Fig. 3, left):
+  </p>
+  <ol data-block-id="/page/5/ListGroup/1" style="list-style-type: none">
+   <li>
+    (1)
+    <math>
+     (v, w)
+    </math>
+    for each
+    <math>
+     (v, w) \in E_G
+    </math>
+    with
+    <math>
+     v, w \in B
+    </math>
+    ,
+   </li>
+   <li>
+    (2)
+    <math>
+     (u^{(-)}, v)
+    </math>
+    for each
+    <math>
+     (u, v) \in E_G
+    </math>
+    with
+    <math>
+     u \in S, v \in B
+    </math>
+    and
+    <math>
+     u \xrightarrow{T'}^* v
+    </math>
+    ,
+   </li>
+   <li>
+    (3)
+    <math>
+     (u^{(+)}, v)
+    </math>
+    for each
+    <math>
+     (u, v) \in E_G
+    </math>
+    with
+    <math>
+     u \in S, v \in B
+    </math>
+    and
+    <math>
+     \nexists u \xrightarrow{T'}^* v
+    </math>
+    ,
+   </li>
+   <li>
+    (4)
+    <math>
+     (v, u^{(+)})
+    </math>
+    for each
+    <math>
+     (v, u) \in E_G
+    </math>
+    with
+    <math>
+     u \in S, v \in B
+    </math>
+    and
+    <math>
+     u \xrightarrow{T'}^* v
+    </math>
+    ,
+   </li>
+   <li>
+    (5)
+    <math>
+     (v, u^{(-)})
+    </math>
+    for each
+    <math>
+     (v, u) \in E_G
+    </math>
+    with
+    <math>
+     u \in S, v \in B
+    </math>
+    and
+    <math>
+     \nexists u \xrightarrow{T'}^* v
+    </math>
+    ,
+   </li>
+   <li>
+    (6)
+    <math>
+     (u_1^{(-)}, u_2^{(-)})
+    </math>
+    for each
+    <math>
+     (u_1, u_2) \in E_G
+    </math>
+    with
+    <math>
+     u_1, u_2 \in S
+    </math>
+    and
+    <math>
+     u_1 \xrightarrow{T'}^* u_2
+    </math>
+    ,
+   </li>
+   <li>
+    (7)
+    <math>
+     (u_1^{(+)}, u_2^{(+)})
+    </math>
+    for each
+    <math>
+     (u_1, u_2) \in E_G
+    </math>
+    with
+    <math>
+     u_1, u_2 \in S
+    </math>
+    and
+    <math>
+     u_2 \xrightarrow{T'}^* u_1
+    </math>
+    ,
+   </li>
+   <li>
+    (8)
+    <math>
+     (u_1^{(+)}, u_2^{(-)})
+    </math>
+    for each
+    <math>
+     (u_1, u_2) \in E_G
+    </math>
+    with
+    <math>
+     u_1, u_2 \in S
+    </math>
+    and
+    <math>
+     \nexists u_1 \xrightarrow{T'}^* u_2
+    </math>
+    and
+    <math>
+     \nexists u_2 \xrightarrow{T'}^* u_1
+    </math>
+    .
+   </li>
+  </ol>
+  <p data-block-id="/page/5/Text/2">
+   After adding these edges a topological sorting as mentioned above gives the rank assignment. This rank assignment tends to select the smallest possible ranks. This is unfavorable for the upper border nodes because the upper border of a subgraph
+   <math>
+    u
+   </math>
+   should be positioned near to the base nodes of
+   <math>
+    u
+   </math>
+   . Thus,
+   <math>
+    \mathbf{R}_{min}(u)
+   </math>
+   should be as large as possible. Thus, the extended nesting graph is finally traversed in converse topological order and
+  </p>
+  <p data-block-id="/page/5/Equation/3">
+   <math display="block">
+    \mathbf{R}(u^{(-)}) = \min\{\mathbf{R}(w) \mid w \in \mathbf{succ}(u^{(-)})\} - 1
+   </math>
+  </p>
+  <p data-block-id="/page/5/Text/4">
+   is calculated to correct this situation (Fig 3, right). Because
+   <math>
+    \mathbf{succ}(u^{(-)})
+   </math>
+   cannot be empty in the nesting graph, the formula is well defined.
+  </p>
+  <h2 data-block-id="/page/5/SectionHeader/5">
+   5 Production of Dummy Nodes
+  </h2>
+  <p data-block-id="/page/5/Text/6">
+   If we delete the nesting edges from the extended nesting graph, the result is a layer hierarchy that identifies for all edges between which layers they must be routed. Next, we must insert the edges
+   <math>
+    e \in E_G
+   </math>
+   that could not be added to the nesting graph because they had produced cycles. In this step, we can select which border of a subgraph is appropriate as anchor point of an edge, because for instance
+   <math>
+    (u_1^{(+)}, u_2^{(-)})
+   </math>
+   ,
+   <math>
+    (u_1^{(-)}, u_2^{(-)})
+   </math>
+   and
+   <math>
+    (u_1^{(+)}, u_2^{(+)})
+   </math>
+   represent the same connectivity edge. This again avoids reverted edges (convention (d)). If the choice of the borders still produces an edge against the edge orientation, we insert a reverted edge and mark it such that later the arrow head can be drawn at the correct end point.
+  </p>
+  <p data-block-id="/page/5/Text/7">
+   After the removal of empty layers, we now split long edges that range over several layers into sequences of edge segments and dummy nodes. After this, the span of each edge
+   <math>
+    (v, w)
+   </math>
+   is
+   <math>
+    \mathbf{R}(w) - \mathbf{R}(v) = 1
+   </math>
+   . In a nested graph, each node must be assigned to a subgraph
+   <math>
+    u
+   </math>
+   . Thus, we must also add the dummy nodes to the nesting tree
+   <math>
+    T'
+   </math>
+   .
+  </p>
+  <p data-block-id="/page/5/Text/8">
+   The border nodes
+   <math>
+    u^{(-)}
+   </math>
+   and
+   <math>
+    u^{(+)}
+   </math>
+   belong to
+   <math>
+    u
+   </math>
+   , i.e., we add the edges
+   <math>
+    u \xrightarrow{T'} u^{(-)}
+   </math>
+   and
+   <math>
+    u \xrightarrow{T'} u^{(+)}
+   </math>
+   to
+   <math>
+    T'
+   </math>
+   . Since unnecessary crossings of edges and borders of the subgraph rectangles
+  </p>
+  <div data-block-id="/page/6/Diagram/0">
+   <img alt="Figure 4: Strategies for the Dummy Node Assignment. The figure shows two strategies for routing edges in a nesting tree. Strategy 1 (left) shows edges routed mostly outside of border rectangles, with dummy nodes always outside. Strategy 2 (right) shows edges routed mostly inside of border rectangles, with dummy nodes often inside. Both strategies show a nesting tree structure and the resulting final layout with rectangles and edges." src="fc46871d72c65d3381d9201646d23439_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <p style="text-align: center;">
+     Strategy 1: Dummy nodes always outside      Strategy 2: Dummy nodes often inside
+    </p>
+    <div class="img-alt">
+     Figure 4: Strategies for the Dummy Node Assignment. The figure shows two strategies for routing edges in a nesting tree. Strategy 1 (left) shows edges routed mostly outside of border rectangles, with dummy nodes always outside. Strategy 2 (right) shows edges routed mostly inside of border rectangles, with dummy nodes often inside. Both strategies show a nesting tree structure and the resulting final layout with rectangles and edges.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/6/Caption/1">
+   Figure 4: Strategies for the Dummy Node Assignment
+  </p>
+  <p data-block-id="/page/6/Text/2">
+   should be avoided (convention (g)), a dummy node belonging to an edge
+   <math>
+    (w_1, w_2)
+   </math>
+   must be assigned at least to the subgraph that contains both
+   <math>
+    w_1
+   </math>
+   and
+   <math>
+    w_2
+   </math>
+   . By this way, we avoid that an edge leaves a border rectangle unnecessarily and later reenters the rectangle producing two crossings with borders. There are two alternative strategies.
+  </p>
+  <ol data-block-id="/page/6/ListGroup/3" style="list-style-type: none">
+   <li>
+    1) Edges
+    <math>
+     (w_1, w_2)
+    </math>
+    are routed mostly outside of border rectangles. If an edge cannot be routed completely inside
+    <math>
+     \square(u)
+    </math>
+    , because either
+    <math>
+     w_1
+    </math>
+    or
+    <math>
+     w_2
+    </math>
+    do not belong to
+    <math>
+     u
+    </math>
+    , then all dummy nodes are placed outside of
+    <math>
+     \square(u)
+    </math>
+    . As effect in the final layout, the edges cross the borders of the rectangles at the sides (Fig. 4, upper left). We look for the first common predecessor
+    <math>
+     u
+    </math>
+    of
+    <math>
+     w_1
+    </math>
+    and
+    <math>
+     w_2
+    </math>
+    in the nesting tree and add all dummy nodes of
+    <math>
+     (w_1, w_2)
+    </math>
+    to this subgraph
+    <math>
+     u
+    </math>
+    (Fig. 4, lower left).
+   </li>
+   <li>
+    2) Edges
+    <math>
+     (w_1, w_2)
+    </math>
+    are routed mostly inside of border rectangles. If
+    <math>
+     w_1
+    </math>
+    or
+    <math>
+     w_2
+    </math>
+    are inside
+    <math>
+     \square(u)
+    </math>
+    , then all dummy nodes
+    <math>
+     d
+    </math>
+    of
+    <math>
+     (w_1, w_2)
+    </math>
+    with
+    <math>
+     \mathbf{R}_{min}(u) \leq \mathbf{R}(d) \leq \mathbf{R}_{max}(u)
+    </math>
+    belong to
+    <math>
+     u
+    </math>
+    . In
+    <math>
+     T'
+    </math>
+    on the path from
+    <math>
+     w_1
+    </math>
+    (and from
+    <math>
+     w_2
+    </math>
+    , resp.) to the root of
+    <math>
+     T'
+    </math>
+    , we look for the first subgraph
+    <math>
+     u
+    </math>
+    that satisfies this condition and add the dummy node
+    <math>
+     d
+    </math>
+    to
+    <math>
+     u
+    </math>
+    (Fig. 4, lower right). As effect in the final layout, the edges often (but not always) cross the upper or lower borders of the rectangles (Fig. 4, upper right).
+   </li>
+  </ol>
+  <p data-block-id="/page/6/Text/4">
+   Because dummy nodes are added as leaves to
+   <math>
+    T'
+   </math>
+   , we consider dummy nodes as elements of the set
+   <math>
+    B
+   </math>
+   in the following.
+  </p>
+  <div data-block-id="/page/7/Diagram/0">
+   <img alt="Figure 5: Forbidden Ordering within the Layers. The figure shows four diagrams of node arrangements in layers. The first diagram (left) shows two subgraphs, Subgraph 1 and Subgraph 2, with nodes in a layer. Subgraph 1 has nodes in positions 1 and 3, while Subgraph 2 has nodes in positions 2 and 4. This is labeled 'illegal'. The second diagram (left) shows the same subgraphs with nodes in positions 1 and 2 for Subgraph 1, and positions 3 and 4 for Subgraph 2, labeled 'legal'. The third diagram (right) shows two subgraphs with nodes in positions 1 and 3 for the first subgraph, and positions 2 and 4 for the second subgraph, labeled 'illegal'. The fourth diagram (right) shows the same subgraphs with nodes in positions 1 and 4 for the first subgraph, and positions 2 and 3 for the second subgraph, labeled 'legal'." src="3121ebddccf183ca63bb9781be440a7e_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <div class="img-alt">
+     Figure 5: Forbidden Ordering within the Layers. The figure shows four diagrams of node arrangements in layers. The first diagram (left) shows two subgraphs, Subgraph 1 and Subgraph 2, with nodes in a layer. Subgraph 1 has nodes in positions 1 and 3, while Subgraph 2 has nodes in positions 2 and 4. This is labeled 'illegal'. The second diagram (left) shows the same subgraphs with nodes in positions 1 and 2 for Subgraph 1, and positions 3 and 4 for Subgraph 2, labeled 'legal'. The third diagram (right) shows two subgraphs with nodes in positions 1 and 3 for the first subgraph, and positions 2 and 4 for the second subgraph, labeled 'illegal'. The fourth diagram (right) shows the same subgraphs with nodes in positions 1 and 4 for the first subgraph, and positions 2 and 3 for the second subgraph, labeled 'legal'.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/7/Caption/1">
+   Figure 5: Forbidden Ordering within the Layers
+  </p>
+  <h2 data-block-id="/page/7/SectionHeader/2">
+   6 Reduction of Crossings
+  </h2>
+  <p data-block-id="/page/7/Text/3">
+   Now, we have a proper hierarchy of layers [9] consisting of base nodes, border nodes that are used as start or end point of connectivity edges between subgraphs, and normal dummy nodes. Each node
+   <math>
+    v
+   </math>
+   has a relative position
+   <math>
+    \mathbf{P}(v)
+   </math>
+   within its layer and belongs to one subgraph, i.e., it occurs in the nesting tree
+   <math>
+    T'
+   </math>
+   . All edge segments point downwards and have the span 1. In the usual layer layout method for simple graphs [8], nodes are now reordered within the layers according to the barycenter weights
+  </p>
+  <p data-block-id="/page/7/Equation/4">
+   <math display="block">
+    W_p(v) = \frac{1}{|\text{pred}(v)|} \sum_{w \in \text{pred}(v)} \mathbf{P}(w)
+   </math>
+   <math display="block">
+    W_s(v) = \frac{1}{|\text{succ}(v)|} \sum_{w \in \text{succ}(v)} \mathbf{P}(w)
+   </math>
+  </p>
+  <p data-block-id="/page/7/Text/5">
+   <math>
+    W_p
+   </math>
+   is used in a top down traversal and
+   <math>
+    W_s
+   </math>
+   in a bottom up traversal of the layers. By this reordering, we get better
+   <math>
+    \mathbf{P}(v)
+   </math>
+   for all base nodes
+   <math>
+    v
+   </math>
+   . However, because of the conventions (e) and (f) of compound graphs, there are two special rules:
+  </p>
+  <ul data-block-id="/page/7/ListGroup/6" style="list-style-type: none">
+   <li>
+    • Nodes
+    <math>
+     v_1, \dots, v_n
+    </math>
+    of a subgraph
+    <math>
+     u
+    </math>
+    of the same rank must be placed in an unbroken sequence within the layer. If there is a node
+    <math>
+     w
+    </math>
+    not belonging to
+    <math>
+     u
+    </math>
+    that is placed between
+    <math>
+     v_i
+    </math>
+    and
+    <math>
+     v_j
+    </math>
+    , then it is not possible to draw a border rectangle around
+    <math>
+     v_i
+    </math>
+    and
+    <math>
+     v_j
+    </math>
+    that does not contain
+    <math>
+     w
+    </math>
+    (Fig. 5, left).
+   </li>
+   <li>
+    • If two subgraphs
+    <math>
+     u
+    </math>
+    and
+    <math>
+     u'
+    </math>
+    are not nested then
+    <math>
+     u
+    </math>
+    must be placed unambiguously to the left or to the right of
+    <math>
+     u'
+    </math>
+    , i.e., both subgraphs must not be intertwined. Assume
+    <math>
+     v_1
+    </math>
+    and
+    <math>
+     v_2
+    </math>
+    belong to
+    <math>
+     u
+    </math>
+    and
+    <math>
+     v'_1
+    </math>
+    and
+    <math>
+     v'_2
+    </math>
+    belong to
+    <math>
+     u'
+    </math>
+    with
+    <math>
+     \mathbf{R}(v_1) = \mathbf{R}(v'_1)
+    </math>
+    and
+    <math>
+     \mathbf{R}(v_2) = \mathbf{R}(v'_2)
+    </math>
+    . If
+    <math>
+     \mathbf{P}(v_1) &lt; \mathbf{P}(v'_1)
+    </math>
+    and
+    <math>
+     \mathbf{P}(v_2) &gt; \mathbf{P}(v'_2)
+    </math>
+    , then it is impossible to draw two rectangles for
+    <math>
+     u
+    </math>
+    and
+    <math>
+     u'
+    </math>
+    that do not cross. Thus, this situation is illegal (Fig. 5, right).
+   </li>
+  </ul>
+  <p data-block-id="/page/7/Text/7">
+   Normal crossing reduction with barycenter weights does not respect these rules. However, if we start with the situation after normal crossing reduction, we have already few
+  </p>
+  <div data-block-id="/page/8/Diagram/0">
+   <img alt="Figure 6: Sorted Traversal of Reduced Nesting Tree T'_i. The diagram shows a nesting tree on the left with nodes labeled with average position P-bar and count N. An arrow points to a version on the right where successors are sorted. Below each tree is a horizontal bar representing the traversal order of nodes." src="ebff22fb5dd6f50a90e44dca0f82f285_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <p style="text-align: center;">
+     Nesting tree with
+     <math>
+      N(u)
+     </math>
+     and
+     <math>
+      \bar{\mathbf{P}}(u)
+     </math>
+     Nesting Tree, successors sorted
+    </p>
+    <p style="text-align: center;">
+     Initial Order      Order produced by a sorted traversal
+    </p>
+    <div class="img-alt">
+     Figure 6: Sorted Traversal of Reduced Nesting Tree T'_i. The diagram shows a nesting tree on the left with nodes labeled with average position P-bar and count N. An arrow points to a version on the right where successors are sorted. Below each tree is a horizontal bar representing the traversal order of nodes.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/8/Caption/1">
+   Figure 6: Sorted Traversal of Reduced Nesting Tree
+   <math>
+    T'_i
+   </math>
+  </p>
+  <p data-block-id="/page/8/Text/2">
+   edge crossings. This is a good starting point. Afterwards, we reposition the nodes within the layers carefully such that nodes of the same subgraph are placed in an unbroken sequence and subgraphs are not intertwined. The guide value of the relative position of a subgraph is the average position of its nodes. The
+   <i>
+    complete average position
+   </i>
+   of a subgraph
+   <math>
+    u
+   </math>
+   is
+  </p>
+  <p data-block-id="/page/8/Equation/3">
+   <math display="block">
+    \bar{\mathbf{P}}(u) = \frac{1}{|\{v \in B \mid u \xrightarrow{T'} v\}|} \sum_{v \in B, u \xrightarrow{T'} v} \mathbf{P}(v)
+   </math>
+  </p>
+  <p data-block-id="/page/8/Text/4">
+   However, we first consider each layer independently. The
+   <i>
+    average position
+   </i>
+   of
+   <math>
+    u
+   </math>
+   for layer
+   <math>
+    i
+   </math>
+   is
+  </p>
+  <p data-block-id="/page/8/Equation/5">
+   <math display="block">
+    \bar{\mathbf{P}}_i(u) = \frac{1}{|\{v \in B \mid \mathbf{R}(v) = i, u \xrightarrow{T'} v\}|} \sum_{v \in B, \mathbf{R}(v)=i, u \xrightarrow{T'} v} \mathbf{P}(v)
+   </math>
+  </p>
+  <p data-block-id="/page/8/Text/6">
+   The idea: if
+   <math>
+    \bar{\mathbf{P}}_i(u_1) &lt; \bar{\mathbf{P}}_i(u_2)
+   </math>
+   then we expect that many nodes belonging to
+   <math>
+    u_1
+   </math>
+   are left of nodes of
+   <math>
+    u_2
+   </math>
+   .
+  </p>
+  <p data-block-id="/page/8/Text/7">
+   We can annotate the nesting tree in time
+   <math>
+    O(|T'|)
+   </math>
+   with the average positions because we need only one traversal of
+   <math>
+    T'
+   </math>
+   . We store at each node of
+   <math>
+    T'
+   </math>
+   the number
+   <math>
+    N_i(u)
+   </math>
+   of leaves of
+   <math>
+    T'
+   </math>
+   (base nodes, border nodes or dummy nodes) that belong to
+   <math>
+    u
+   </math>
+   and have rank
+   <math>
+    i
+   </math>
+   . For simplicity of the formulas, we define
+   <math>
+    \bar{\mathbf{P}}_i(v) = \mathbf{P}(v)
+   </math>
+   and
+   <math>
+    N_i(v) = 1
+   </math>
+   for leaves of
+   <math>
+    T'
+   </math>
+   . Thus, during the traversal, we need only to consider the direct successors of
+   <math>
+    u
+   </math>
+   in
+   <math>
+    T'
+   </math>
+   according to the formula
+  </p>
+  <p data-block-id="/page/8/Equation/8">
+   <math display="block">
+    \begin{aligned} N_i(u) &amp;= \sum_{u \xrightarrow{T'} w, \mathbf{R}(w)=i} N_i(w) \\ \bar{\mathbf{P}}_i(u) &amp;= \frac{1}{N_i(u)} \sum_{u \xrightarrow{T'} w, \mathbf{R}(w)=i} N_i(w) \bar{\mathbf{P}}_i(w) \end{aligned}
+   </math>
+  </p>
+  <div data-block-id="/page/9/Diagram/0">
+   <img alt="Figure 7: Bad Reordering Using P-bar. The diagram shows three stages of subgraph placement. 1. Initial situation: Subgraphs are shown as vertical columns with nodes (circles) and edges (lines) connecting them across layers. 2. Placement according to compl.layer.position P-bar: Subgraphs are placed in vertical columns with numerical values (1.25, 2.6, 1, 1.5, 1.3, 2.6, 3, 3.2) indicating their average position per layer. 3. Placement without reorderings: The subgraphs are shown in their final positions, which are interleaved and not in a simple sequence." src="a5ee5c23b6dc52ec1d724b76d5a5f58f_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <div class="img-alt">
+     Figure 7: Bad Reordering Using P-bar. The diagram shows three stages of subgraph placement. 1. Initial situation: Subgraphs are shown as vertical columns with nodes (circles) and edges (lines) connecting them across layers. 2. Placement according to compl.layer.position P-bar: Subgraphs are placed in vertical columns with numerical values (1.25, 2.6, 1, 1.5, 1.3, 2.6, 3, 3.2) indicating their average position per layer. 3. Placement without reorderings: The subgraphs are shown in their final positions, which are interleaved and not in a simple sequence.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/9/Caption/1">
+   Figure 7: Bad Reordering Using
+   <math>
+    \bar{\mathbf{P}}
+   </math>
+  </p>
+  <p data-block-id="/page/9/Text/2">
+   If we consider layer
+   <math>
+    i
+   </math>
+   independently, we use the nesting tree
+   <math>
+    T'_i
+   </math>
+   that is reduced such that it contains only leaves of rank
+   <math>
+    i
+   </math>
+   (Fig. 9, compare first and second row). This reduced nesting tree can be traversed such that the children of each inner node are sorted according to
+   <math>
+    \bar{\mathbf{P}}_i(u)
+   </math>
+   . This needs time
+   <math>
+    O(|T'_i| \log |T'_i|)
+   </math>
+   . By a sorted traversal, the leaves of
+   <math>
+    T'_i
+   </math>
+   are sorted such that all nodes of the same subgraph are placed in an unbroken sequence (Fig. 6).
+  </p>
+  <p data-block-id="/page/9/Text/3">
+   If all layers are reordered by a sorted traversal of each
+   <math>
+    T'_i
+   </math>
+   , we know that we can draw subgraph rectangles at each layer, but – with respect to all layers – still two subgraphs can be intertwined. We could reorder all nodes of all layers in a similar way by the complete average position
+   <math>
+    \bar{\mathbf{P}}(u)
+   </math>
+   instead of the average position per layer
+   <math>
+    \bar{\mathbf{P}}_i(u)
+   </math>
+   . This avoids intertwined subgraphs, but often reorders the layers much more than necessary (Fig. 7). Instead, we use the
+   <i>
+    subgraph ordering graph
+   </i>
+   (Fig. 8).
+  </p>
+  <p data-block-id="/page/9/Text/4">
+   <b>
+    Definition 3
+   </b>
+   <i>
+    The subgraph ordering graph consists of all nodes
+    <math>
+     w \in S \cup B
+    </math>
+    . It contains an edge
+    <math>
+     (w, w')
+    </math>
+    iff there are nodes
+    <math>
+     v, v'
+    </math>
+    and a subgraph
+    <math>
+     u_0
+    </math>
+    with
+    <math>
+     \mathbf{R}(v) = \mathbf{R}(v')
+    </math>
+    and
+    <math>
+     \mathbf{P}(v) = \mathbf{P}(v') - 1
+    </math>
+    (i.e.,
+    <math>
+     v
+    </math>
+    and
+    <math>
+     v'
+    </math>
+    are directly neighbored nodes at the same layer) and
+    <math>
+     w \neq w'
+    </math>
+    and
+    <math>
+     u_0 \xrightarrow{T} w \xrightarrow{T^*} v
+    </math>
+    and
+    <math>
+     u_0 \xrightarrow{T} w' \xrightarrow{T^*} v'
+    </math>
+    .
+   </i>
+  </p>
+  <p data-block-id="/page/9/Text/5">
+   The subgraph ordering graph consists of edges corresponding to the relation ‘is left of’. If two nodes
+   <math>
+    v
+   </math>
+   and
+   <math>
+    v'
+   </math>
+   are neighbored and belong to subgraphs
+   <math>
+    u_1 \xrightarrow{T} \dots \xrightarrow{T^*} u_n
+   </math>
+   and
+   <math>
+    u'_1 \xrightarrow{T} \dots \xrightarrow{T^*} u'_m
+   </math>
+   , then each
+   <math>
+    u_i
+   </math>
+   is left of each
+   <math>
+    u'_j
+   </math>
+   , thus we normally need edges between all pairs
+   <math>
+    (u_i, u'_j)
+   </math>
+   with
+   <math>
+    1 \leq i \leq n
+   </math>
+   and
+   <math>
+    1 \leq j \leq m
+   </math>
+   . However, if
+   <math>
+    u_1
+   </math>
+   is left of
+   <math>
+    u'_1
+   </math>
+   , the nesting structure automatically implies that each
+   <math>
+    u_i
+   </math>
+   is left of each
+   <math>
+    u'_j
+   </math>
+   . Thus, it is sufficient to add the edge
+   <math>
+    (u_1, u'_1)
+   </math>
+   to the subgraph ordering graph.
+  </p>
+  <p data-block-id="/page/9/Text/6">
+   If we sort the subgraph ordering graph topologically, we get the ordering
+   <math>
+    \lambda_O
+   </math>
+   denoting which subgraph is left of other subgraphs. If two subgraphs are intertwined, the subgraph ordering graph is cyclic and cannot be sorted topologically. We must break these
+  </p>
+  <div data-block-id="/page/10/Diagram/0">
+   <img alt="Figure 8: Subgraph Ordering Graph. The figure consists of three parts. On the left, 'Situation in the layers' shows a vertical stack of nodes in layers, with some nodes shaded or patterned. In the middle, 'Nesting tree with 'is left of' edges' shows a tree structure where nodes are connected by directed edges, some of which are shaded. On the right, 'Subgraph Ordering Graph' shows a graph with nodes and directed edges, including a legend for node types (shaded, patterned, and a square with a diagonal line)." src="cfef993dcc8fb513de79eb1f93cf26ae_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <div class="img-alt">
+     Figure 8: Subgraph Ordering Graph. The figure consists of three parts. On the left, 'Situation in the layers' shows a vertical stack of nodes in layers, with some nodes shaded or patterned. In the middle, 'Nesting tree with 'is left of' edges' shows a tree structure where nodes are connected by directed edges, some of which are shaded. On the right, 'Subgraph Ordering Graph' shows a graph with nodes and directed edges, including a legend for node types (shaded, patterned, and a square with a diagonal line).
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/10/Caption/1">
+   Figure 8: Subgraph Ordering Graph
+  </p>
+  <p data-block-id="/page/10/Text/2">
+   cycles by removing edges. Note that there is no direct relation between the number of removed edges and the number of reordered nodes. Thus it is not necessary to look for the minimum number of edges to be removed (minimum feedback arc set problem, which is
+   <i>
+    NP
+   </i>
+   complete). Instead, we use as heuristics the complete average position of subgraphs. Cycles of the subgraph ordering graph are broken at the node
+   <math>
+    w
+   </math>
+   with smallest
+   <math>
+    \overline{\mathbf{P}}(w)
+   </math>
+   .
+  </p>
+  <p data-block-id="/page/10/Text/3">
+   If we perform a sorted traversal of all layers according to the order
+   <math>
+    \lambda_O
+   </math>
+   , all nodes are reordered such that they are placed in an unbroken sequence within the layers and no subgraphs are intertwined. As a variant, we can make the subgraph ordering acyclic by the heuristics mentioned above, but it is not necessary to use the
+   <i>
+    same
+   </i>
+   <math>
+    \lambda_O
+   </math>
+   for each layer. Topological orderings need not be unique for a given graph. As long as a
+   <math>
+    \lambda_{O,i}
+   </math>
+   for the
+   <math>
+    i
+   </math>
+   th layer is a topological ordering of the subgraph ordering graph, we get a legal placement of the nodes. If during the calculation of
+   <math>
+    \lambda_{O,i}
+   </math>
+   there is a choice between several next nodes, we take the node with the smallest average barycenter weight
+  </p>
+  <p data-block-id="/page/10/Equation/4">
+   <math display="block">
+    W_{p,i}(u) = \frac{1}{|\{v \in B \mid \mathbf{R}(v) = i, u \xrightarrow{T^*} v\}|} \sum_{v \in B, \mathbf{R}(v)=i, u \xrightarrow{T^*} v} W_p(v)
+   </math>
+  </p>
+  <p data-block-id="/page/10/Text/5">
+   Because this formula is similar to the formula
+   <math>
+    \overline{\mathbf{P}}_i(u)
+   </math>
+   , we can use the same calculation method in time
+   <math>
+    O(|T'_i|)
+   </math>
+   . This combines the normal crossing reduction by barycenter weights with the special method of compound graphs. Of course,
+   <math>
+    W_p
+   </math>
+   is used during a top down traversal of the layers, and a similarly defined
+   <math>
+    W_{s,i}
+   </math>
+   is used during bottom up traversals of the layers. To sum up, the algorithm is
+  </p>
+  <div data-block-id="/page/11/Diagram/0">
+   <img alt="A multi-step diagram showing the crossing reduction of a compound graph. It starts with a nesting tree and an initial graph with 24 crossings. Through three layers of sorting according to P1, P2, and P3, the number of crossings is reduced to 2. It also shows subgraph ordering graphs and an acyclic subgraph ordering graph. The final step shows the graph being partitioned into layers and then a final drawing with 2 crossings." src="d4af765160d04ecef538e5066006dc77_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <p>
+     Nesting tree
+    </p>
+    <p>
+     Initial situation: 24 crossings
+    </p>
+    <p>
+     Reduced nesting tree
+    </p>
+    <p>
+     1. layer
+     <br/>
+     traverse sorted according
+     <math>
+      \bar{P}_1
+     </math>
+    </p>
+    <p>
+     22 crossings
+    </p>
+    <p>
+     2. layer
+     <br/>
+     sort according
+     <math>
+      W_p
+     </math>
+    </p>
+    <p>
+     12 crossings
+    </p>
+    <p>
+     Reduced nesting tree
+    </p>
+    <p>
+     2. layer
+     <br/>
+     traverse sorted according
+     <math>
+      \bar{P}_2
+     </math>
+    </p>
+    <p>
+     12 crossings
+    </p>
+    <p>
+     3. layer
+     <br/>
+     sort according
+     <math>
+      W_p
+     </math>
+    </p>
+    <p>
+     2 crossings
+    </p>
+    <p>
+     Reduced nesting tree
+    </p>
+    <p>
+     3. layer
+     <br/>
+     traverse sorted according
+     <math>
+      \bar{P}_3
+     </math>
+    </p>
+    <p>
+     2 crossings
+    </p>
+    <p>
+     Graph EHMT and graph DGJNQ are still intertwined
+    </p>
+    <p>
+     Subgraph ordering graph with
+     <math>
+      \bar{P}
+     </math>
+    </p>
+    <p>
+     acyclic subgraph ordering graph with
+     <math>
+      \lambda_O
+     </math>
+    </p>
+    <p>
+     Layers
+     <br/>
+     traverse sorted according
+     <math>
+      \lambda_{O,i}
+     </math>
+    </p>
+    <p>
+     2 crossings
+    </p>
+    <p>
+     final drawing
+    </p>
+    <div class="img-alt">
+     A multi-step diagram showing the crossing reduction of a compound graph. It starts with a nesting tree and an initial graph with 24 crossings. Through three layers of sorting according to P1, P2, and P3, the number of crossings is reduced to 2. It also shows subgraph ordering graphs and an acyclic subgraph ordering graph. The final step shows the graph being partitioned into layers and then a final drawing with 2 crossings.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/11/Caption/1">
+   Figure 9: Crossing Reduction of Compound Graphs
+  </p>
+  <h3 data-block-id="/page/12/SectionHeader/0">
+   Algorithm: Crossing Reduction of Compound Graphs
+  </h3>
+  <div data-block-id="/page/12/Text/1">
+   <p>
+    <b>
+     Given:
+    </b>
+    Proper hierarchy
+    <math>
+     H = [V_1, \dots, V_n]
+    </math>
+    with set
+    <math>
+     E_G
+    </math>
+    of connectivity edges
+    <br/>
+    and set
+    <math>
+     S
+    </math>
+    of subgraphs. Let
+    <math>
+     T'
+    </math>
+    be the nesting tree of this compound graph
+   </p>
+   <pre>
+(1)  <math>C =</math> Number of Crossings in this hierarchy;
+(2)  <b>while</b> <math>C</math> is still unsatisfactory <b>do</b>
+(3)      Sorted Traversal of <math>T'_1</math> according to <math>\bar{P}_1</math>
+(4)      // this produces a placement with unbroken sequences of subgraph nodes in layer 1
+(5)      <b>for each</b> <math>V_i</math> <b>from</b> <math>i = 2</math> <b>to</b> <math>n</math> <b>do</b>
+(6)          <b>for each</b> <math>v \in V_i</math> <b>do</b> calculate <math>W_p(v)</math>; <b>od</b>
+(7)          Sort <math>V_i</math> by <math>W_p</math>;
+(8)          Sorted Traversal of <math>T'_i</math> according to <math>\bar{P}_i</math>
+(9)          // this produces a placement with unbroken sequences of subgraph nodes in layer <math>i</math>
+(10)     <b>od</b>
+(11)     Calculate subgraph ordering graph <math>OG</math>;
+(12)     Sort <math>OG</math> topologically and break cycles if necessary
+(13)     <b>for each</b> <math>w \in V_1 \cup S</math> <b>do</b> <math>W_{p,1}(w) = 1</math>; <b>od</b>
+(14)     // We need an artificial <math>W_{p,1}</math> to calculate <math>\lambda_{O,1}</math>
+(15)     Sorted traversal of <math>T'_1</math> according to <math>\lambda_{O,1}</math>
+(16)     <b>for each</b> <math>V_i</math> <b>from</b> <math>i = 2</math> <b>to</b> <math>n</math> <b>do</b>
+(17)         <b>for each</b> <math>w \in V_i \cup S</math> <b>do</b> calculate <math>W_{p,i}(w)</math>; <b>od</b>
+(18)         // We need <math>W_{p,i}</math> to calculate <math>\lambda_{O,i}</math>
+(19)         Sorted traversal of <math>T'_i</math> according to <math>\lambda_{O,i}</math>
+(20)     <b>od</b>
+(21)     ... similar with bottom up layer traversals ...
+(22)     <math>C =</math> Number of Crossings in this hierarchy;
+(23) <b>od</b>
+</pre>
+  </div>
+  <p data-block-id="/page/12/Text/2">
+   Lines (3)-(10) produce a ordering with unbroken sequences at the layers. This is the precondition that the subgraph ordering graph
+   <math>
+    OG
+   </math>
+   can be calculated. Lines (13)-(20) reorder the layers such that subgraph
+   <math>
+    u
+   </math>
+   is placed completely left of subgraph
+   <math>
+    u'
+   </math>
+   , if
+   <math>
+    (u, u')
+   </math>
+   is an edge in
+   <math>
+    OG
+   </math>
+   after
+   <math>
+    OG
+   </math>
+   is made acyclic. If we do this at layer
+   <math>
+    i
+   </math>
+   , the barycenter weights of layer
+   <math>
+    i + 1
+   </math>
+   can change completely. Thus, the
+   <math>
+    W_{p,i+1}
+   </math>
+   values must be recalculated and influence the placement by
+   <math>
+    \lambda_{O,i+1}
+   </math>
+   . Figure 9 shows a traversal of the layers by this method.
+  </p>
+  <h2 data-block-id="/page/12/SectionHeader/3">
+   7 Positioning of Nodes and Edges
+  </h2>
+  <p data-block-id="/page/12/Text/4">
+   Finally, we calculate the absolute positions of the nodes such that there is sufficient space for the border rectangles. Here, we cannot place each layer independently, because this may yield positions where it is impossible to draw straight vertical border lines between the subgraphs (compare with Fig. 7, left). Border rectangles should not overlap. Thus we introduce artificial sequences of dummy nodes to the left and to the right of each subgraph. A
+   <i>
+    left border segment
+   </i>
+   of a subgraph
+   <math>
+    u
+   </math>
+   consists of dummy nodes
+   <math>
+    v_i
+   </math>
+   for each layer
+   <math>
+    i = \mathbf{R}_{min}(u), \dots, \mathbf{R}_{max}(u)
+   </math>
+   and invisible edges
+   <math>
+    (v_i, v_{i+1})
+   </math>
+   between these dummy nodes.
+  </p>
+  <div data-block-id="/page/13/Diagram/0">
+   <img alt="Figure 10: Border Segments and Border Nodes. The left part, 'Situation during node positioning', shows a grid of nodes with shaded regions representing subgraphs. Labels point to 'left border segments', 'upper border nodes', 'right border segments', and 'lower border nodes'. The right part, 'final drawing', shows the same structure with clear rectangular boxes around the subgraphs and arrows indicating connections between them." src="4801720824e4b5e2361a5564f91cfb70_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <div class="img-alt">
+     Figure 10: Border Segments and Border Nodes. The left part, 'Situation during node positioning', shows a grid of nodes with shaded regions representing subgraphs. Labels point to 'left border segments', 'upper border nodes', 'right border segments', and 'lower border nodes'. The right part, 'final drawing', shows the same structure with clear rectangular boxes around the subgraphs and arrows indicating connections between them.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/13/Caption/1">
+   Figure 10: Border Segments and Border Nodes
+  </p>
+  <p data-block-id="/page/13/Text/2">
+   The dummy nodes are added to the left of the nodes of
+   <math>
+    u
+   </math>
+   into the layers. A
+   <i>
+    right border segment
+   </i>
+   is added similarly (Fig. 10).
+  </p>
+  <p data-block-id="/page/13/Text/3">
+   In [6], we called such sequences of dummy nodes and edges
+   <i>
+    linear segments
+   </i>
+   , and we presented a layout method that places linear segments as straight vertical lines without bendings. This method additionally considered conventions (a), (b) and (c). We use it now to place the nodes and to route the edges. Because left and right border segments are placed as straight lines, we can draw the real border of the subgraph rectangle there. It runs exactly along the border nodes such that in the final picture, the edges to subgraphs seem to point to the rectangles.
+  </p>
+  <div data-block-id="/page/13/Diagram/4">
+   <img alt="Figure 11: Compound Graph. A complex hierarchical graph structure. It consists of several nested boxes representing subgraphs. 'Graph 1' contains 'Graph 1.2' and 'Graph 1.1'. 'Graph 1.2' contains 'Graph 1.2.1' and 'Graph 1.2.2'. 'Graph 1.1' contains 'Graph 1.1.3', 'Graph 1.1.2', and 'Graph 1.1.1'. Nodes are represented by yellow rectangles with letters: P, Q, K, L, M, N, D, G, H, E, F, J, B, A, C. Arrows show directed edges between nodes, both within subgraphs and between subgraphs." src="bd671b21db63e6fdb2196e9b18502aac_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <div class="img-alt">
+     Figure 11: Compound Graph. A complex hierarchical graph structure. It consists of several nested boxes representing subgraphs. 'Graph 1' contains 'Graph 1.2' and 'Graph 1.1'. 'Graph 1.2' contains 'Graph 1.2.1' and 'Graph 1.2.2'. 'Graph 1.1' contains 'Graph 1.1.3', 'Graph 1.1.2', and 'Graph 1.1.1'. Nodes are represented by yellow rectangles with letters: P, Q, K, L, M, N, D, G, H, E, F, J, B, A, C. Arrows show directed edges between nodes, both within subgraphs and between subgraphs.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/13/Caption/5">
+   Figure 11: Compound Graph
+  </p>
+  <div data-block-id="/page/14/Diagram/0">
+   <img alt="Figure 12: Differences of Layout Methods. The figure shows two diagrams comparing layout methods. The left diagram, labeled 'Layers in D-Abductor', shows a hierarchical structure where nodes are grouped into subgraphs, each with its own local layering. The right diagram, labeled 'Layers in VCG tool', shows a global layering where all nodes of a single layer are aligned horizontally across the entire graph, regardless of which subgraph they belong to. Both diagrams use small squares to represent nodes and dashed lines to represent layer boundaries." src="33ed1f9b27c7c21c797aa928b0f06851_img.jpg"/>
+   <div class="img-description" style="border: 1px solid #ccc; padding: 10px;">
+    <div style="display: flex; justify-content: space-around; margin-top: 10px;">
+     <span>
+      Layers in D-Abductor
+     </span>
+     <span>
+      Layers in VCG tool
+     </span>
+    </div>
+    <div class="img-alt">
+     Figure 12: Differences of Layout Methods. The figure shows two diagrams comparing layout methods. The left diagram, labeled 'Layers in D-Abductor', shows a hierarchical structure where nodes are grouped into subgraphs, each with its own local layering. The right diagram, labeled 'Layers in VCG tool', shows a global layering where all nodes of a single layer are aligned horizontally across the entire graph, regardless of which subgraph they belong to. Both diagrams use small squares to represent nodes and dashed lines to represent layer boundaries.
+    </div>
+   </div>
+  </div>
+  <p data-block-id="/page/14/Caption/1">
+   Figure 12: Differences of Layout Methods
+  </p>
+  <h2 data-block-id="/page/14/SectionHeader/2">
+   8 Conclusion and Comparision with Similar Methods
+  </h2>
+  <p data-block-id="/page/14/Text/3">
+   The algorithm is implemented in the VCG tool [5]. Figure 1 was produced by the VCG tool. Figure 11 shows another typical result produced with this algorithm.
+  </p>
+  <p data-block-id="/page/14/Text/4">
+   As mentioned above, the presented layout method has similarities with the layout method used in the tool D-Abductor [7]. Both methods are based on the layout in layers. There are some differences:
+  </p>
+  <ul data-block-id="/page/14/ListGroup/5" style="list-style-type: none">
+   <li>
+    • In [7], partitioning of nodes into layers is based on a labeling of the
+    <i>
+     nesting tree
+    </i>
+    instead of the
+    <i>
+     nesting graph
+    </i>
+    . In principle, this corresponds to the calculation of the upper rank
+    <math>
+     \mathbf{R}_{min}
+    </math>
+    of subgraphs while the lower rank
+    <math>
+     \mathbf{R}_{max}
+    </math>
+    is ignored. This may result in unnecessary reversions of edges while we try to avoid these as described in section 5.
+   </li>
+   <li>
+    • The VCG tool starts the layout from a global situation of the graph while D-Abductor preferably treats subgraphs locally. For instance, the layer lines are globally valid for all subgraphs in the VCG tool, i.e. all nodes of one layer have nearly the same
+    <math>
+     y
+    </math>
+    coordinate independent of the subgraphs they belong to (Fig. 12, right). In [7], each subgraph has own layer positions (Fig. 12, left).
+   </li>
+  </ul>
+  <ul data-block-id="/page/15/ListGroup/0" style="list-style-type: none">
+   <li>
+    • The layer partitioning in [7] is converted into a
+    <i>
+     proper compound digraph
+    </i>
+    by using compound dummy nodes. In a proper compound digraph, the upper corners of subgraphs of one layer are placed at the same
+    <math>
+     y
+    </math>
+    coordinate. Arrangement that vertically overlap as in Fig. 12, right, are not allowed while they can be produced by the VCG tool.
+   </li>
+   <li>
+    • As side effect of the proper compound digraph, edges are routed mostly outside of border rectangles and cross the borders at the sides. This can be compared with the effect of Fig. 4, above left. Our algorithm is more flexible here.
+   </li>
+   <li>
+    • However, there are often less dummy nodes in a proper compound digraph than in the global partitioning used by the VCG tool. Since the speed of the layout methods is influenced by the number of dummy nodes, the method of [7] is often faster.
+   </li>
+   <li>
+    • Crossing reduction is based on the barycenter sorting of the layers in both methods. [7] works recursively through the nest of subgraphs and calculates local crossing reduction while respecting the global situation at the same time. We start with a global crossing situation, where subgraph borders are still not respected, and reorder the layers carefully afterwards such that subgraph rectangles can be drawn.
+   </li>
+  </ul>
+  <p data-block-id="/page/15/Text/1">
+   Other layout methods are restricted to recursive layout where subgraphs are treated as large nodes. Edges pointing beyond the border of subgraphs are ignored during the crossing reduction. Thus they are not routed optimally [3, 4]. Such a method is used in the Edge tool [4] that allows constraint specifications by the user to influence partitioning and crossing reduction.
+  </p>
+  <p data-block-id="/page/15/Text/2">
+   The method of the VCG tool gives good results, is flexible and fully automatically, i.e. it does not need user constraints. It is well suited for the layout of block diagrams and nested compiler graphs, as the VCG tool is designed for. It is well integrated in the normal layout method of simple graphs such that it is possible to use all variants of layouts of the VCG tool (e.g. compound orthogonal layouts, compound spline layouts and compound polygon layouts).
+  </p>
+  <h2 data-block-id="/page/15/SectionHeader/3">
+   References
+  </h2>
+  <ul data-block-id="/page/15/ListGroup/4" style="list-style-type: none">
+   <li>
+    [1]
+    <b>
+     Eades, P.; Sugiyama, K.:
+    </b>
+    <i>
+     How to Draw a Directed Graph
+    </i>
+    , Journal of Information Processing, 13 (4), pp. 424-437, 1990.
+   </li>
+   <li>
+    [2]
+    <b>
+     Feng, Q.W.; Eades, P.; Cohen, R.F.:
+    </b>
+    <i>
+     Planar Drawings of Clustered Graphs
+    </i>
+    , Technical Report 05-95, Department of Computer Science, The University of Newcastle, Australia, 1995.
+   </li>
+  </ul>
+  <ul data-block-id="/page/16/ListGroup/0" style="list-style-type: none">
+   <li>
+    [3]
+    <b>
+     Henry, T.R.:
+    </b>
+    <i>
+     Interactive Graph Layout: The Exploration of Large Graphs
+    </i>
+    , Ph. D. Thesis, TR 92-03, Department of Computer Science, The University of Arizona, 1992.
+   </li>
+   <li>
+    [4]
+    <b>
+     Paulisch, F.N.; Tichy, W.F.:
+    </b>
+    <i>
+     EDGE: An Extendible Graph Editor
+    </i>
+    , Software – Practice and Experience 20 (S1), pp. 63-88, 1990.
+   </li>
+   <li>
+    [5]
+    <b>
+     Sander, G.:
+    </b>
+    <i>
+     Graph Layout Through the VCG Tool
+    </i>
+    , in Tamassia, R.; Tollis, I.G., eds.: Graph Drawing, Proc. DIMACS Intern. Workshop GD'94, LNCS 894, pp. 194-205, Springer, 1995.
+   </li>
+   <li>
+    [6]
+    <b>
+     Sander, G.:
+    </b>
+    <i>
+     A Fast Heuristic for Hierarchical Manhattan Layout
+    </i>
+    , in Brandenburg, F.J., ed.: Graph Drawing, Proc. Symposium on Graph Drawing, GD'95, LNCS 1027, pp. 447-458, Springer, 1996.
+   </li>
+   <li>
+    [7]
+    <b>
+     Sugiyama K.; Misue K.:
+    </b>
+    <i>
+     Visualization of Structural Information: Automatic Drawing of Compound Digraphs
+    </i>
+    , IEEE Trans. Sys., Man, and Cybernetics, 21(4), pp. 876-892, 1991.
+   </li>
+   <li>
+    [8]
+    <b>
+     Sugiyama, K.; Tagawa, S.; Toda, M.:
+    </b>
+    <i>
+     Methods for Visual Understanding of Hierarchical Systems
+    </i>
+    , IEEE Trans. Sys., Man, and Cybernetics, SMC 11(2), pp. 109-125, 1981.
+   </li>
+   <li>
+    [9]
+    <b>
+     Warfield, J.N.:
+    </b>
+    <i>
+     Crossing Theory and Hierarchy Mapping
+    </i>
+    , IEEE Trans. Sys., Man, and Cybernetics, SMC 7(7), pp. 505-523, 1977.
+   </li>
+  </ul>
+ </body>
+</html>

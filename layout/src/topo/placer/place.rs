@@ -58,6 +58,8 @@ impl<'a> Placer<'a> {
 
         BK::new(self.vg).do_it();
 
+        simple::adjust_subgraph_borders(self.vg);
+
         verifier::do_it(self.vg);
 
         edge_fixer::do_it(self.vg);

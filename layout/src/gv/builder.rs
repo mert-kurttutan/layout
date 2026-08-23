@@ -3,7 +3,7 @@
 use super::html::{parse_html_string, HtmlGrid};
 use super::parser::ast::DotString;
 use super::record::record_builder;
-use crate::adt::dag::NodeHandle;
+use crate::adt::dag::{NodeHandle, SubgraphHandle};
 use crate::adt::map::ScopedMap;
 use crate::core::base::Orientation;
 use crate::core::color::Color;
@@ -76,11 +76,21 @@ struct EdgeDesc {
     to_port: Option<String>,
 }
 
+#[derive(Debug)]
+struct SubgraphDesc {
+    name: String,
+    parent: usize,
+    props: PropertyList,
+}
+
 /// This class constructs a visual graph from the parsed AST.
 #[derive(Debug)]
 pub struct GraphBuilder {
     // This records the state of the top-level graph.
     global_state: PropertyList,
+    subgraphs: Vec<SubgraphDesc>,
+    subgraph_stack: Vec<usize>,
+    node_subgraphs: HashMap<String, usize>,
     // This keeps track of the construction order of the nodes, because
     // hashmap does not maintain a persistent iteration order.
     node_order: Vec<String>,
@@ -104,6 +114,13 @@ impl GraphBuilder {
     pub fn new() -> Self {
         Self {
             global_state: PropertyList::new(),
+            subgraphs: vec![SubgraphDesc {
+                name: String::from("main"),
+                parent: 0,
+                props: PropertyList::new(),
+            }],
+            subgraph_stack: vec![0],
+            node_subgraphs: HashMap::new(),
             node_order: Vec::new(),
             nodes: HashMap::new(),
             edges: Vec::new(),
@@ -116,6 +133,7 @@ impl GraphBuilder {
         self.global_attr.push();
         self.node_attr.push();
         self.edge_attr.push();
+        self.subgraphs[0].name = graph.name.clone();
         for stmt in &graph.list.list {
             self.visit_stmt(stmt);
         }
@@ -123,6 +141,7 @@ impl GraphBuilder {
         // TODO: we dump the property list when we close the scope. This is not
         // correct for sub graphs.
         self.global_state = self.global_attr.flatten();
+        self.subgraphs[0].props = self.global_state.clone();
 
         self.global_attr.pop();
         self.node_attr.pop();
@@ -140,8 +159,45 @@ impl GraphBuilder {
                 self.visit_att(a);
             }
             ast::Stmt::SubGraph(g) => {
-                self.visit_graph(g);
+                self.visit_subgraph(g);
             }
+        }
+    }
+
+    fn visit_subgraph(&mut self, graph: &ast::Graph) {
+        let parent = *self.subgraph_stack.last().unwrap_or(&0);
+        let is_cluster = graph.name.starts_with("cluster_");
+        let subgraph_idx = if is_cluster {
+            let idx = self.subgraphs.len();
+            self.subgraphs.push(SubgraphDesc {
+                name: graph.name.clone(),
+                parent,
+                props: PropertyList::new(),
+            });
+            self.subgraph_stack.push(idx);
+            idx
+        } else {
+            parent
+        };
+
+        self.global_attr.push();
+        self.node_attr.push();
+        self.edge_attr.push();
+
+        for stmt in &graph.list.list {
+            self.visit_stmt(stmt);
+        }
+
+        if is_cluster {
+            self.subgraphs[subgraph_idx].props = self.global_attr.flatten();
+        }
+
+        self.global_attr.pop();
+        self.node_attr.pop();
+        self.edge_attr.pop();
+
+        if is_cluster {
+            self.subgraph_stack.pop();
         }
     }
 
@@ -190,6 +246,10 @@ impl GraphBuilder {
             }
         } else {
             self.node_order.push(name.to_string());
+            self.node_subgraphs.insert(
+                name.to_string(),
+                *self.subgraph_stack.last().unwrap_or(&0),
+            );
             self.nodes.insert(name.to_string(), node_attr);
         }
     }
@@ -239,6 +299,18 @@ impl GraphBuilder {
 
         let mut vg = VisualGraph::new(dir);
 
+        let mut subgraph_handles = vec![SubgraphHandle::new(0)];
+        for subgraph in self.subgraphs.iter().skip(1) {
+            let parent = subgraph_handles[subgraph.parent];
+            let elem = Self::get_subgraph_shape_from_attributes(
+                dir,
+                &subgraph.props,
+                &subgraph.name,
+            );
+            let handle = vg.add_subgraph(elem, parent);
+            subgraph_handles.push(handle);
+        }
+
         // Keeps track of the newly created nodes and indexes them by name.
         let mut node_map: HashMap<String, NodeHandle> = HashMap::new();
 
@@ -250,7 +322,10 @@ impl GraphBuilder {
 
             let shape =
                 Self::get_shape_from_attributes(dir, node_prop, node_name);
-            let handle = vg.add_node(shape);
+            let subgraph_idx =
+                *self.node_subgraphs.get(node_name).unwrap_or(&0);
+            let handle =
+                vg.add_node_to_subgraph(shape, subgraph_handles[subgraph_idx]);
             node_map.insert(node_name.to_string(), handle);
         }
 
@@ -523,5 +598,67 @@ impl GraphBuilder {
             font_size,
         );
         Element::create(shape, look, dir, sz)
+    }
+
+    fn get_subgraph_shape_from_attributes(
+        dir: Orientation,
+        lst: &PropertyList,
+        default_name: &str,
+    ) -> Element {
+        let label =
+            lst.get("label")
+                .and_then(Self::get_label_content)
+                .or_else(|| {
+                    if default_name.is_empty() || default_name == "main" {
+                        None
+                    } else {
+                        Some(ShapeContent::String(default_name.to_string()))
+                    }
+                });
+        let mut edge_color = String::from("black");
+        let mut fill_color: Option<String> = None;
+        let mut font_size: usize = 14;
+        let line_width: usize = 1;
+
+        if let Option::Some(DotString::String(x)) =
+            lst.get(&"color".to_string())
+        {
+            edge_color = Self::normalize_color(x.clone());
+        }
+
+        if let Option::Some(DotString::String(style)) =
+            lst.get(&"style".to_string())
+        {
+            if style == "filled" && !lst.contains_key("fillcolor") {
+                fill_color = Some(edge_color.clone());
+            }
+        }
+
+        if let Option::Some(DotString::String(x)) =
+            lst.get(&"fillcolor".to_string())
+        {
+            fill_color = if x == "transparent" {
+                None
+            } else {
+                Some(Self::normalize_color(x.clone()))
+            };
+        }
+
+        if let Option::Some(DotString::String(fx)) =
+            lst.get(&"fontsize".to_string())
+        {
+            if let Result::Ok(x) = fx.parse::<usize>() {
+                font_size = x;
+            }
+        }
+
+        let look = StyleAttr::new(
+            Color::fast(&edge_color),
+            line_width,
+            fill_color.map(|color| Color::fast(&color)),
+            0,
+            font_size,
+        );
+        Element::create_subgraph(dir, label, &look)
     }
 }

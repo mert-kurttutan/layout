@@ -12,11 +12,15 @@ use crate::core::base::Orientation;
 use crate::core::format::RenderBackend;
 use crate::core::format::Renderable;
 use crate::core::format::Visible;
+use crate::core::geometry::get_size_for_str;
+use crate::core::geometry::Point;
 use crate::core::geometry::Position;
+use crate::core::style::StyleAttr;
 use crate::std_shapes::render::*;
 use crate::std_shapes::shapes::*;
 use crate::topo::optimizer::EdgeCrossOptimizer;
 use crate::topo::optimizer::RankOptimizer;
+use crate::topo::sander;
 use std::mem::swap;
 use std::vec;
 
@@ -26,6 +30,8 @@ use super::placer::Placer;
 pub struct VisualGraph {
     // Holds all of the elements in the graph.
     nodes: Vec<Element>,
+    // Holds all of the subgraph frames in the graph.
+    subgraphs: Vec<Element>,
     // The arrows and the list of elements that they visits.
     edges: Vec<(Arrow, Vec<NodeHandle>)>,
     // Contains a list of self-edges. We use this as a temporary storage during
@@ -43,8 +49,20 @@ pub struct VisualGraph {
 
 impl VisualGraph {
     pub fn new(orientation: Orientation) -> Self {
+        let main_graph = Element::create_subgraph(
+            orientation,
+            None,
+            &StyleAttr::new(
+                crate::core::color::Color::transparent(),
+                0,
+                None,
+                0,
+                14,
+            ),
+        );
         VisualGraph {
             nodes: Vec::new(),
+            subgraphs: vec![main_graph],
             edges: Vec::new(),
             self_edges: Vec::new(),
             dag: DAG::new(),
@@ -80,6 +98,28 @@ impl VisualGraph {
         self.element_mut(n).position_mut()
     }
 
+    pub fn pos_sg(&self, sg: SubgraphHandle) -> Position {
+        self.subgraphs[sg.get_index()].position()
+    }
+
+    pub fn pos_sg_mut(&mut self, sg: SubgraphHandle) -> &mut Position {
+        self.subgraphs[sg.get_index()].position_mut()
+    }
+
+    pub fn size_sg_label(&self, sg: SubgraphHandle) -> Point {
+        let font_size = self.subgraphs[sg.get_index()].look.font_size;
+        match &self.subgraphs[sg.get_index()].shape {
+            ShapeKind::Frame(Some(ShapeContent::String(label))) => {
+                get_size_for_str(label, font_size)
+            }
+            ShapeKind::Frame(Some(ShapeContent::Html(html))) => {
+                html.size(font_size)
+            }
+            ShapeKind::Frame(None) => Point::zero(),
+            _ => panic!("Subgraph does not have a frame shape"),
+        }
+    }
+
     pub fn is_connector(&self, n: NodeHandle) -> bool {
         return self.element(n).is_connector();
     }
@@ -87,6 +127,9 @@ impl VisualGraph {
     pub fn transpose(&mut self) {
         for node in self.dag.iter() {
             self.element_mut(node).transpose();
+        }
+        for subgraph in &mut self.subgraphs {
+            subgraph.transpose();
         }
     }
 
@@ -101,10 +144,37 @@ impl VisualGraph {
     /// Add a node to the graph.
     /// \returns a handle to the node.
     pub fn add_node(&mut self, elem: Element) -> NodeHandle {
-        let res = self.dag.new_node();
+        self.add_node_to_subgraph(elem, SubgraphHandle::new(0))
+    }
+
+    pub fn add_node_to_subgraph(
+        &mut self,
+        elem: Element,
+        parent_subgraph_idx: SubgraphHandle,
+    ) -> NodeHandle {
+        let res = self.dag.new_node(parent_subgraph_idx);
         assert!(res.get_index() == self.nodes.len());
         self.nodes.push(elem);
         res
+    }
+
+    pub fn add_connector_node(
+        &mut self,
+        elem: Element,
+        from: NodeHandle,
+        to: NodeHandle,
+    ) -> NodeHandle {
+        let res = self.dag.new_connector_node(from, to);
+        assert!(res.get_index() == self.nodes.len());
+        self.nodes.push(elem);
+        res
+    }
+
+    pub(crate) fn add_vertical_border(&mut self, lvl_s: usize, lvl_e: usize) {
+        (lvl_s..=lvl_e).for_each(|_| {
+            self.nodes.push(Element::create_border());
+            self.nodes.push(Element::create_border());
+        });
     }
 
     /// Add an edge to the graph.
@@ -114,11 +184,25 @@ impl VisualGraph {
         let lst = vec![from, to];
         self.edges.push((arrow, lst));
     }
+
+    pub fn add_subgraph(
+        &mut self,
+        elem: Element,
+        parent_subgraph_idx: SubgraphHandle,
+    ) -> SubgraphHandle {
+        let res = self.dag.new_subgraph(parent_subgraph_idx);
+        assert!(res.get_index() == self.subgraphs.len());
+        self.subgraphs.push(elem);
+        res
+    }
 }
 
 // Render.
 impl VisualGraph {
     fn render(&self, debug: bool, rb: &mut dyn RenderBackend) {
+        for subgraph in &self.subgraphs {
+            subgraph.render(debug, rb);
+        }
         // Draw the nodes.
         for node in &self.nodes {
             node.render(debug, rb);
@@ -143,7 +227,11 @@ impl VisualGraph {
         disable_layout: bool,
         rb: &mut dyn RenderBackend,
     ) {
+        if self.dag.is_empty() {
+            return;
+        }
         self.lower(disable_opt);
+        sander::do_it(self);
         Placer::new(self).layout(disable_layout);
         self.render(debug_mode, rb);
     }
@@ -221,7 +309,7 @@ impl VisualGraph {
             let dir = self.element(from).orientation;
             let conn =
                 Element::create_connector_with_content(text, &arrow.look, dir);
-            let conn = self.add_node(conn);
+            let conn = self.add_connector_node(conn, from, to);
 
             // Update the edge node list, and remove the text.
             edge.1 = vec![from, conn, to];
@@ -261,9 +349,9 @@ impl VisualGraph {
                 let prev_level = self.dag.level(prev);
                 let curr_level = self.dag.level(curr);
 
-                // If the edges point to a lower rank then move on.
-                assert!(prev_level < curr_level, "Invalid edge");
-                if prev_level + 1 == curr_level {
+                // If the edge already spans zero or one rank, there is no
+                // long edge to split.
+                if prev_level + 1 >= curr_level {
                     i += 1;
                     continue;
                 }
@@ -271,7 +359,7 @@ impl VisualGraph {
                 // We need to add a new connector node.
                 let dir = self.element(prev).orientation;
                 let conn = Element::empty_connector(dir);
-                let conn = self.add_node(conn);
+                let conn = self.add_connector_node(conn, prev, curr);
                 lst.insert(i, conn);
 
                 // Update the dag connections.
@@ -307,7 +395,10 @@ impl VisualGraph {
             } else {
                 Element::create_connector("", &arrow.look, dir)
             };
-            let conn = self.add_node(conn);
+            let conn = self.add_node_to_subgraph(
+                conn,
+                self.dag.get_parent_subgraph_index_n(node),
+            );
             self.dag.update_node_rank_level(conn, level, Some(node));
             self.edges.push((arrow, vec![node, conn, node]));
         }

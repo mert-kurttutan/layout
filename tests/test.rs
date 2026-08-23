@@ -339,6 +339,30 @@ mod tests {
     }
 
     #[test]
+    fn render_filled_cluster_uses_cluster_color() {
+        let svg = render_dot(
+            r#"digraph G {
+                subgraph cluster_0 {
+                    style=filled;
+                    color=lightgrey;
+                    node [style=filled,color=white];
+                    a0 -> a1 -> a2 -> a3;
+                    label = "process #1";
+                }
+
+                start -> a0;
+                start -> b0;
+                a3 -> a0;
+                a3 -> end;
+                b3 -> end;
+            }"#,
+        );
+
+        assert!(svg.contains("fill=\"#d3d3d3ff\""));
+        assert!(!svg.contains("fill=\"#000000ff\" \n            stroke-width=\"1\" stroke=\"#d3d3d3ff\""));
+    }
+
+    #[test]
     fn render_html_entities() {
         let svg = render_dot(
             r#"digraph {
