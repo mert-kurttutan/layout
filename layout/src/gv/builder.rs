@@ -611,6 +611,7 @@ impl GraphBuilder {
     ) -> Option<Element> {
         let mut label = lst.get("label").and_then(Self::get_label_content)?;
         let mut font_size: usize = 14;
+        let valign = Self::get_label_location(lst, VAlign::Top);
 
         if let Option::Some(DotString::String(fx)) =
             lst.get(&"fontsize".to_string())
@@ -625,9 +626,19 @@ impl GraphBuilder {
         }
 
         let shape = ShapeKind::None(label);
-        let look = StyleAttr::new(Color::fast("black"), 0, None, 0, font_size);
+        let mut look =
+            StyleAttr::new(Color::fast("black"), 0, None, 0, font_size);
+        look.valign = valign;
         let sz = get_shape_size(dir, &shape, font_size, false);
         Some(Element::create(shape, look, dir, sz))
+    }
+
+    fn get_label_location(lst: &PropertyList, default: VAlign) -> VAlign {
+        match lst.get("labelloc") {
+            Some(DotString::String(value)) if value == "b" => VAlign::Bottom,
+            Some(DotString::String(value)) if value == "t" => VAlign::Top,
+            _ => default,
+        }
     }
 
     fn get_subgraph_shape_from_attributes(
@@ -649,6 +660,7 @@ impl GraphBuilder {
         let mut fill_color: Option<String> = None;
         let mut font_size: usize = 14;
         let line_width: usize = 1;
+        let valign = Self::get_label_location(lst, VAlign::Top);
 
         if let Option::Some(DotString::String(x)) =
             lst.get(&"color".to_string())
@@ -682,13 +694,14 @@ impl GraphBuilder {
             }
         }
 
-        let look = StyleAttr::new(
+        let mut look = StyleAttr::new(
             Color::fast(&edge_color),
             line_width,
             fill_color.map(|color| Color::fast(&color)),
             0,
             font_size,
         );
+        look.valign = valign;
         Element::create_subgraph(dir, label, &look)
     }
 }

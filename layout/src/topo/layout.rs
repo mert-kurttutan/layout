@@ -15,7 +15,7 @@ use crate::core::format::Visible;
 use crate::core::geometry::get_size_for_str;
 use crate::core::geometry::Point;
 use crate::core::geometry::Position;
-use crate::core::style::StyleAttr;
+use crate::core::style::{StyleAttr, VAlign};
 use crate::std_shapes::render::*;
 use crate::std_shapes::shapes::*;
 use crate::topo::optimizer::EdgeCrossOptimizer;
@@ -270,37 +270,47 @@ impl VisualGraph {
         let mut min_x = f64::INFINITY;
         let mut max_x = f64::NEG_INFINITY;
         let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
         for node in &self.nodes {
             let bbox = node.position().bbox(false);
             min_x = min_x.min(bbox.0.x);
             max_x = max_x.max(bbox.1.x);
             min_y = min_y.min(bbox.0.y);
+            max_y = max_y.max(bbox.1.y);
         }
         for subgraph in &self.subgraphs {
             let bbox = subgraph.position().bbox(false);
             min_x = min_x.min(bbox.0.x);
             max_x = max_x.max(bbox.1.x);
             min_y = min_y.min(bbox.0.y);
+            max_y = max_y.max(bbox.1.y);
         }
-        if !min_x.is_finite() || !max_x.is_finite() || !min_y.is_finite() {
+        if !min_x.is_finite()
+            || !max_x.is_finite()
+            || !min_y.is_finite()
+            || !max_y.is_finite()
+        {
             return;
         }
 
         let label_height = label.position().size(false).y;
         let margin = 10.;
-        let label_center = Point::new(
-            (min_x + max_x) / 2.,
-            min_y - margin - label_height / 2.,
-        );
+        let label_y = match label.look.valign {
+            VAlign::Bottom => max_y + margin + label_height / 2.,
+            _ => min_y - margin - label_height / 2.,
+        };
+        let label_center = Point::new((min_x + max_x) / 2., label_y);
         label.position_mut().move_to(label_center);
 
-        let shift_y = (label_height + margin * 2.).max(0.);
-        label.position_mut().translate(Point::new(0., shift_y));
-        for node in &mut self.nodes {
-            node.position_mut().translate(Point::new(0., shift_y));
-        }
-        for subgraph in &mut self.subgraphs {
-            subgraph.position_mut().translate(Point::new(0., shift_y));
+        if !matches!(label.look.valign, VAlign::Bottom) {
+            let shift_y = (label_height + margin * 2.).max(0.);
+            label.position_mut().translate(Point::new(0., shift_y));
+            for node in &mut self.nodes {
+                node.position_mut().translate(Point::new(0., shift_y));
+            }
+            for subgraph in &mut self.subgraphs {
+                subgraph.position_mut().translate(Point::new(0., shift_y));
+            }
         }
 
         let label_min_x = label.position().bbox(false).0.x;

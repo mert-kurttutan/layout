@@ -736,12 +736,14 @@ impl Renderable for Element {
                 );
                 if let Some(label) = label {
                     let text_size = content_size(label, self.look.font_size);
-                    let text_pos = Point::new(
-                        self.pos.middle().x,
-                        self.pos.bbox(false).0.y
-                            + text_size.y / 2.
-                            + BORDER_PADDING / 2.,
-                    );
+                    let frame = self.pos.bbox(false);
+                    let label_y = match self.look.valign {
+                        VAlign::Bottom => {
+                            frame.1.y - text_size.y / 2. - BORDER_PADDING / 2.
+                        }
+                        _ => frame.0.y + text_size.y / 2. + BORDER_PADDING / 2.,
+                    };
+                    let text_pos = Point::new(self.pos.middle().x, label_y);
                     draw_shape_content(
                         label, text_pos, text_size, &self.look, canvas,
                     );

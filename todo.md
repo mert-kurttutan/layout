@@ -48,20 +48,6 @@ Required changes:
 - For `gradientangle`, decide whether to implement SVG gradients or explicitly document it as unsupported.
 - Add per-attribute tests that inspect SVG output.
 
-### Add graph and cluster label rendering
-
-Current state:
-
-- Graph-level `label` parses as a graph `AttrStmt`, is recorded in `GraphBuilder::global_state`, and is rendered as a label-only element above the drawing.
-- Subgraphs/clusters are parsed recursively, preserved as frame elements, and render string or HTML labels.
-- `labelloc` is still ignored for graph and cluster labels.
-
-Required changes:
-
-- Implement `labelloc=t/b` for graph labels.
-- Implement `labelloc=t/b` for cluster labels.
-- Add broader tests for graph HTML labels and bottom-positioned labels.
-
 ### Improve malformed HTML error handling
 
 Current state:

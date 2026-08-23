@@ -24,6 +24,7 @@ digraph GraphClusterLabelDemo {
                 <TR><TD><FONT POINT-SIZE="10">HTML label</FONT></TD></TR>
             </TABLE>
         >;
+        labelloc=b;
         style=filled;
         fillcolor=lightyellow;
         color=goldenrod;

@@ -35,6 +35,23 @@ mod tests {
         svg.finalize()
     }
 
+    fn text_y(svg: &str, label: &str) -> f64 {
+        let label_idx = svg
+            .find(&format!(">{}</tspan>", label))
+            .unwrap_or_else(|| panic!("expected label {}", label));
+        let y_idx = svg[..label_idx]
+            .rfind(" y=\"")
+            .unwrap_or_else(|| panic!("expected y coordinate for {}", label));
+        let y_start = y_idx + 4;
+        let y_end = svg[y_start..]
+            .find('"')
+            .map(|idx| y_start + idx)
+            .expect("expected y coordinate terminator");
+        svg[y_start..y_end]
+            .parse()
+            .unwrap_or_else(|_| panic!("expected numeric y for {}", label))
+    }
+
     fn is_identifier(t: Token, target: &str) -> bool {
         match t {
             Token::Identifier(name) => target == name,
@@ -380,6 +397,25 @@ mod tests {
 
         assert!(svg.contains(">Graph Label</tspan>"));
         assert!(svg.contains(">Cluster Label</tspan>"));
+    }
+
+    #[test]
+    fn render_bottom_graph_and_cluster_labels() {
+        let svg = render_dot(
+            r#"digraph G {
+                label="Bottom Graph Label";
+                labelloc=b;
+
+                subgraph cluster_0 {
+                    label="Bottom Cluster Label";
+                    labelloc=b;
+                    a -> b;
+                }
+            }"#,
+        );
+
+        assert!(text_y(&svg, "Bottom Graph Label") > text_y(&svg, "b"));
+        assert!(text_y(&svg, "Bottom Cluster Label") > text_y(&svg, "b"));
     }
 
     #[test]
