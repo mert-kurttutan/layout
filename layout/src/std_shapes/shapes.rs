@@ -119,8 +119,24 @@ impl Element {
         look: &StyleAttr,
         dir: Orientation,
     ) -> Element {
+        Self::create_connector_with_content(
+            ShapeContent::String(label.to_string()),
+            look,
+            dir,
+        )
+    }
+
+    pub fn create_connector_with_content(
+        mut label: ShapeContent,
+        look: &StyleAttr,
+        dir: Orientation,
+    ) -> Element {
+        if let ShapeContent::Html(HtmlGrid::FontTable(table)) = &mut label {
+            table.resize(look.font_size);
+        }
+
         Element {
-            shape: ShapeKind::new_connector(label),
+            shape: ShapeKind::Connector(Some(label)),
             look: look.clone(),
             orientation: dir,
             pos: Position::new(
@@ -148,7 +164,7 @@ pub struct Arrow {
     pub start: LineEndKind,
     pub end: LineEndKind,
     pub line_style: LineStyleKind,
-    pub text: String,
+    pub text: Option<ShapeContent>,
     pub look: StyleAttr,
     pub properties: Option<String>,
     pub src_port: Option<String>,
@@ -161,7 +177,7 @@ impl Default for Arrow {
             start: LineEndKind::None,
             end: LineEndKind::Arrow,
             line_style: LineStyleKind::Normal,
-            text: String::new(),
+            text: Option::None,
             look: StyleAttr::simple(),
             properties: Option::None,
             src_port: Option::None,
@@ -193,11 +209,30 @@ impl Arrow {
         src_port: &Option<String>,
         dst_port: &Option<String>,
     ) -> Arrow {
+        let text = if text.is_empty() {
+            Option::None
+        } else {
+            Option::Some(ShapeContent::String(String::from(text)))
+        };
+        Self::new_with_content(
+            start, end, line_style, text, look, src_port, dst_port,
+        )
+    }
+
+    pub fn new_with_content(
+        start: LineEndKind,
+        end: LineEndKind,
+        line_style: LineStyleKind,
+        text: Option<ShapeContent>,
+        look: &StyleAttr,
+        src_port: &Option<String>,
+        dst_port: &Option<String>,
+    ) -> Arrow {
         Arrow {
             start,
             end,
             line_style,
-            text: String::from(text),
+            text,
             look: look.clone(),
             properties: Option::None,
             src_port: src_port.clone(),
@@ -215,11 +250,16 @@ impl Arrow {
         src_port: &Option<String>,
         dst_port: &Option<String>,
     ) -> Arrow {
+        let text = if text.is_empty() {
+            Option::None
+        } else {
+            Option::Some(ShapeContent::String(String::from(text)))
+        };
         Arrow {
             start,
             end,
             line_style,
-            text: String::from(text),
+            text,
             look: look.clone(),
             properties: Option::Some(properties.into()),
             src_port: src_port.clone(),

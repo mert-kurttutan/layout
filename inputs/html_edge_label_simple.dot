@@ -1,0 +1,8 @@
+digraph G {
+  rankdir=LR
+
+  a [label="source"]
+  b [label="target"]
+
+  a -> b [label=<plain <B>HTML</B> edge label>]
+}

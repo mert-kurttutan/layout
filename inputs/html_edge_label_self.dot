@@ -1,0 +1,14 @@
+digraph G {
+  a [
+    shape=box
+    label="self edge"
+  ]
+
+  a -> a [
+    label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+        <TR><TD><I>self</I></TD><TD>HTML edge</TD></TR>
+      </TABLE>
+    >
+  ]
+}

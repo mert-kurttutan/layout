@@ -930,12 +930,17 @@ pub fn render_arrow(
     let start = matches!(arrow.start, LineEndKind::Arrow);
     let end = matches!(arrow.end, LineEndKind::Arrow);
 
+    let text = match &arrow.text {
+        Option::Some(ShapeContent::String(text)) => text.as_str(),
+        _ => "",
+    };
+
     canvas.draw_arrow(
         &path,
         dash,
         (start, end),
         &arrow.look,
         arrow.properties.clone(),
-        &arrow.text,
+        text,
     );
 }

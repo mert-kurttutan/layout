@@ -1,0 +1,22 @@
+digraph G {
+  rankdir=LR
+
+  node [shape=box]
+
+  a [label="source"]
+  b [label="target"]
+
+  a -> b [
+    label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+        <TR>
+          <TD BGCOLOR="lightblue"><B>HTML</B></TD>
+          <TD PORT="p">edge label</TD>
+        </TR>
+        <TR>
+          <TD COLSPAN="2">A &amp; B</TD>
+        </TR>
+      </TABLE>
+    >
+  ]
+}

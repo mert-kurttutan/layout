@@ -319,6 +319,26 @@ mod tests {
     }
 
     #[test]
+    fn render_html_edge_label() {
+        let svg = render_dot(
+            r#"digraph {
+                a [label="source"];
+                b [label="target"];
+                a -> b [label=<
+                    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+                        <TR><TD><B>HTML</B></TD><TD>edge label</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains(">source</tspan>"));
+        assert!(svg.contains(">target</tspan>"));
+        assert!(svg.contains(">HTML</tspan>"));
+        assert!(svg.contains(">edge label</tspan>"));
+    }
+
+    #[test]
     fn parse_record0() {
         let desc = "hello&#92;nworld |{ b |{c|<here> d|e}| f}| g | h";
         let res = parse_record_string(desc);

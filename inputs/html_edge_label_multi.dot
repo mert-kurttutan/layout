@@ -1,0 +1,21 @@
+digraph G {
+  rankdir=TB
+
+  a [label="A"]
+  b [label="B"]
+  c [label="C"]
+
+  a -> b [
+    label=<first <B>HTML</B> label>
+  ]
+
+  b -> c [
+    label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+        <TR><TD>table</TD><TD>label</TD></TR>
+      </TABLE>
+    >
+  ]
+
+  a -> c [label="plain text label"]
+}

@@ -211,20 +211,21 @@ impl VisualGraph {
             let to = lst[1];
 
             // If the edge is empty then there is nothing to do.
-            if edge.0.text.is_empty() {
+            if edge.0.text.is_none() {
                 continue;
             }
 
-            let text = arrow.text.clone();
+            let text = arrow.text.clone().unwrap();
 
             // Create a new connection block.
             let dir = self.element(from).orientation;
-            let conn = Element::create_connector(&text, &arrow.look, dir);
+            let conn =
+                Element::create_connector_with_content(text, &arrow.look, dir);
             let conn = self.add_node(conn);
 
             // Update the edge node list, and remove the text.
             edge.1 = vec![from, conn, to];
-            edge.0.text = String::new();
+            edge.0.text = Option::None;
 
             // Add the edge to dag.
             let res = self.dag.remove_edge(from, to);
@@ -298,10 +299,14 @@ impl VisualGraph {
             let mut arrow = se.0.clone();
             let node = se.1;
             let level = self.dag.level(node);
-            let text = arrow.text.to_string();
-            arrow.text = String::new();
+            let text = arrow.text.clone();
+            arrow.text = Option::None;
             let dir = self.element(node).orientation;
-            let conn = Element::create_connector(&text, &arrow.look, dir);
+            let conn = if let Some(text) = text {
+                Element::create_connector_with_content(text, &arrow.look, dir)
+            } else {
+                Element::create_connector("", &arrow.look, dir)
+            };
             let conn = self.add_node(conn);
             self.dag.update_node_rank_level(conn, level, Some(node));
             self.edges.push((arrow, vec![node, conn, node]));

@@ -1,0 +1,29 @@
+digraph G {
+  rankdir=LR
+
+  a [
+    shape=plain
+    label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+        <TR><TD PORT="out">out</TD></TR>
+      </TABLE>
+    >
+  ]
+
+  b [
+    shape=plain
+    label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+        <TR><TD PORT="in">in</TD></TR>
+      </TABLE>
+    >
+  ]
+
+  a:out -> b:in [
+    label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="3">
+        <TR><TD PORT="label_port">port edge label</TD></TR>
+      </TABLE>
+    >
+  ]
+}

@@ -239,14 +239,23 @@ impl GraphBuilder {
         } else {
             LineEndKind::None
         };
-        let mut label = String::from("");
+        let mut label = Option::None;
         let mut color = String::from("black");
         let mut line_style = LineStyleKind::Normal;
 
-        if let Option::Some(DotString::String(val)) =
-            lst.get(&"label".to_string())
-        {
-            label = val.clone();
+        if let Option::Some(val) = lst.get(&"label".to_string()) {
+            match val {
+                DotString::String(val) => {
+                    if !val.is_empty() {
+                        label = Option::Some(ShapeContent::String(val.clone()));
+                    }
+                }
+                DotString::HtmlString(val) => {
+                    label = Option::Some(ShapeContent::Html(
+                        parse_html_string(val).unwrap(),
+                    ));
+                }
+            }
         }
 
         if let Option::Some(DotString::String(stl)) =
@@ -288,7 +297,9 @@ impl GraphBuilder {
 
         let color = Color::fast(&color);
         let look = StyleAttr::new(color, line_width, None, 0, font_size);
-        Arrow::new(start, end, line_style, &label, &look, &from_port, &to_port)
+        Arrow::new_with_content(
+            start, end, line_style, label, &look, &from_port, &to_port,
+        )
     }
 
     /// Convert the color to some color that we can handle.
