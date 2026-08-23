@@ -363,6 +363,26 @@ mod tests {
     }
 
     #[test]
+    fn render_graph_and_cluster_labels() {
+        let svg = render_dot(
+            r#"digraph G {
+                label="Graph Label";
+                fontsize=22;
+
+                subgraph cluster_0 {
+                    label="Cluster Label";
+                    style=filled;
+                    fillcolor=lightgrey;
+                    a -> b;
+                }
+            }"#,
+        );
+
+        assert!(svg.contains(">Graph Label</tspan>"));
+        assert!(svg.contains(">Cluster Label</tspan>"));
+    }
+
+    #[test]
     fn render_html_entities() {
         let svg = render_dot(
             r#"digraph {

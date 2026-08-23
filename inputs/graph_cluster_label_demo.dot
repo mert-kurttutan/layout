@@ -1,0 +1,37 @@
+digraph GraphClusterLabelDemo {
+    label="Top-Level Graph Label";
+    labelloc=t;
+    fontsize=22;
+    compound=true;
+
+    node [shape=box, style="rounded,filled", fillcolor=white];
+
+    subgraph cluster_alpha {
+        label="Cluster Alpha";
+        style=filled;
+        fillcolor=lightcyan;
+        color=steelblue;
+
+        a1 [label="Alpha Input"];
+        a2 [label="Alpha Worker"];
+        a1 -> a2;
+    }
+
+    subgraph cluster_beta {
+        label=<
+            <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">
+                <TR><TD><B>Cluster Beta</B></TD></TR>
+                <TR><TD><FONT POINT-SIZE="10">HTML label</FONT></TD></TR>
+            </TABLE>
+        >;
+        style=filled;
+        fillcolor=lightyellow;
+        color=goldenrod;
+
+        b1 [label="Beta API"];
+        b2 [label="Beta Store"];
+        b1 -> b2;
+    }
+
+    a2 -> b1 [label="handoff", ltail=cluster_alpha, lhead=cluster_beta];
+}

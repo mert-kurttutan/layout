@@ -28,6 +28,8 @@ use super::placer::Placer;
 
 #[derive(Debug)]
 pub struct VisualGraph {
+    // Optional top-level graph label.
+    graph_label: Option<Element>,
     // Holds all of the elements in the graph.
     nodes: Vec<Element>,
     // Holds all of the subgraph frames in the graph.
@@ -61,6 +63,7 @@ impl VisualGraph {
             ),
         );
         VisualGraph {
+            graph_label: None,
             nodes: Vec::new(),
             subgraphs: vec![main_graph],
             edges: Vec::new(),
@@ -76,6 +79,10 @@ impl VisualGraph {
 
     pub fn num_nodes(&self) -> usize {
         self.dag.len()
+    }
+
+    pub fn set_graph_label(&mut self, elem: Element) {
+        self.graph_label = Some(elem);
     }
 
     pub fn iter_nodes(&self) -> NodeIterator {
@@ -125,6 +132,9 @@ impl VisualGraph {
     }
 
     pub fn transpose(&mut self) {
+        if let Some(label) = &mut self.graph_label {
+            label.transpose();
+        }
         for node in self.dag.iter() {
             self.element_mut(node).transpose();
         }
@@ -200,6 +210,9 @@ impl VisualGraph {
 // Render.
 impl VisualGraph {
     fn render(&self, debug: bool, rb: &mut dyn RenderBackend) {
+        if let Some(label) = &self.graph_label {
+            label.render(debug, rb);
+        }
         for subgraph in &self.subgraphs {
             subgraph.render(debug, rb);
         }
@@ -233,6 +246,7 @@ impl VisualGraph {
         self.lower(disable_opt);
         sander::do_it(self);
         Placer::new(self).layout(disable_layout);
+        self.place_graph_label();
         self.render(debug_mode, rb);
     }
 
@@ -245,6 +259,60 @@ impl VisualGraph {
 
         for elem in self.dag.iter() {
             self.element_mut(elem).resize();
+        }
+    }
+
+    fn place_graph_label(&mut self) {
+        let Some(label) = &mut self.graph_label else {
+            return;
+        };
+
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        for node in &self.nodes {
+            let bbox = node.position().bbox(false);
+            min_x = min_x.min(bbox.0.x);
+            max_x = max_x.max(bbox.1.x);
+            min_y = min_y.min(bbox.0.y);
+        }
+        for subgraph in &self.subgraphs {
+            let bbox = subgraph.position().bbox(false);
+            min_x = min_x.min(bbox.0.x);
+            max_x = max_x.max(bbox.1.x);
+            min_y = min_y.min(bbox.0.y);
+        }
+        if !min_x.is_finite() || !max_x.is_finite() || !min_y.is_finite() {
+            return;
+        }
+
+        let label_height = label.position().size(false).y;
+        let margin = 10.;
+        let label_center = Point::new(
+            (min_x + max_x) / 2.,
+            min_y - margin - label_height / 2.,
+        );
+        label.position_mut().move_to(label_center);
+
+        let shift_y = (label_height + margin * 2.).max(0.);
+        label.position_mut().translate(Point::new(0., shift_y));
+        for node in &mut self.nodes {
+            node.position_mut().translate(Point::new(0., shift_y));
+        }
+        for subgraph in &mut self.subgraphs {
+            subgraph.position_mut().translate(Point::new(0., shift_y));
+        }
+
+        let label_min_x = label.position().bbox(false).0.x;
+        if label_min_x < 0. {
+            let shift_x = -label_min_x + margin;
+            label.position_mut().translate(Point::new(shift_x, 0.));
+            for node in &mut self.nodes {
+                node.position_mut().translate(Point::new(shift_x, 0.));
+            }
+            for subgraph in &mut self.subgraphs {
+                subgraph.position_mut().translate(Point::new(shift_x, 0.));
+            }
         }
     }
 

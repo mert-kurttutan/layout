@@ -52,16 +52,15 @@ Required changes:
 
 Current state:
 
-- Graph-level `label=<...>` parses as a graph `AttrStmt`.
-- `GraphBuilder` records top-level graph attributes in `global_state`, but `VisualGraph` has no graph-label render path.
-- Subgraphs/clusters are parsed recursively, but the current builder flattens them and does not preserve cluster boxes/labels.
+- Graph-level `label` parses as a graph `AttrStmt`, is recorded in `GraphBuilder::global_state`, and is rendered as a label-only element above the drawing.
+- Subgraphs/clusters are parsed recursively, preserved as frame elements, and render string or HTML labels.
+- `labelloc` is still ignored for graph and cluster labels.
 
 Required changes:
 
-- Add graph-level metadata to `VisualGraph`, including optional label content and style.
-- Render graph labels before or after nodes based on desired z-order.
-- Defer cluster HTML labels until subgraph/cluster layout support exists, because cluster boxes need bounds and nesting.
-- Add tests for top-level graph labels now; add cluster tests after subgraph support lands.
+- Implement `labelloc=t/b` for graph labels.
+- Implement `labelloc=t/b` for cluster labels.
+- Add broader tests for graph HTML labels and bottom-positioned labels.
 
 ### Improve malformed HTML error handling
 

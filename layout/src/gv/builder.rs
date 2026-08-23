@@ -298,6 +298,11 @@ impl GraphBuilder {
         }
 
         let mut vg = VisualGraph::new(dir);
+        if let Some(label) =
+            Self::get_graph_label_from_attributes(dir, &self.global_state)
+        {
+            vg.set_graph_label(label);
+        }
 
         let mut subgraph_handles = vec![SubgraphHandle::new(0)];
         for subgraph in self.subgraphs.iter().skip(1) {
@@ -598,6 +603,31 @@ impl GraphBuilder {
             font_size,
         );
         Element::create(shape, look, dir, sz)
+    }
+
+    fn get_graph_label_from_attributes(
+        dir: Orientation,
+        lst: &PropertyList,
+    ) -> Option<Element> {
+        let mut label = lst.get("label").and_then(Self::get_label_content)?;
+        let mut font_size: usize = 14;
+
+        if let Option::Some(DotString::String(fx)) =
+            lst.get(&"fontsize".to_string())
+        {
+            if let Result::Ok(x) = fx.parse::<usize>() {
+                font_size = x;
+            }
+        }
+
+        if let ShapeContent::Html(HtmlGrid::FontTable(table)) = &mut label {
+            table.resize(font_size);
+        }
+
+        let shape = ShapeKind::None(label);
+        let look = StyleAttr::new(Color::fast("black"), 0, None, 0, font_size);
+        let sz = get_shape_size(dir, &shape, font_size, false);
+        Some(Element::create(shape, look, dir, sz))
     }
 
     fn get_subgraph_shape_from_attributes(
