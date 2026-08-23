@@ -1,0 +1,18 @@
+digraph G {
+  node [shape=plain]
+
+  a [label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+      <TR><TD>known amp: &amp;</TD></TR>
+      <TR><TD>known lt: &lt;</TD></TR>
+      <TR><TD>known gt: &gt;</TD></TR>
+      <TR><TD>known quot: &quot;</TD></TR>
+      <TR><TD>known apos: &apos;</TD></TR>
+      <TR><TD>known nbsp: A&nbsp;B</TD></TR>
+      <TR><TD>adjacent entities: &lt;&gt;&amp;&quot;&apos;</TD></TR>
+      <TR><TD>repeated amp: &amp;&amp;&amp;</TD></TR>
+      <TR><TD>mixed text: before&amp;middle&lt;after&gt;</TD></TR>
+      <TR><TD>quote pair: &quot;&apos;&apos;&quot;</TD></TR>
+    </TABLE>
+  >]
+}

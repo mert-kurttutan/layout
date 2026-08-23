@@ -21,6 +21,51 @@ type PropertyList = HashMap<String, DotString>;
 // AST into the VisualGraph data-structure that we use for layout and rendering
 // of the graph.
 
+fn decode_quoted_label_entities(label: &str) -> String {
+    let mut result = String::new();
+    let mut chars = label.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch != '&' {
+            result.push(ch);
+            continue;
+        }
+
+        let mut entity = String::from("&");
+        while let Some(&next) = chars.peek() {
+            entity.push(next);
+            chars.next();
+            if next == ';' {
+                break;
+            }
+        }
+
+        if entity.ends_with(';') {
+            if let Some(decoded) = decode_quoted_label_entity(&entity) {
+                result.push(decoded);
+            } else {
+                result.push_str(&entity);
+            }
+        } else {
+            result.push_str(&entity);
+        }
+    }
+
+    result
+}
+
+fn decode_quoted_label_entity(entity: &str) -> Option<char> {
+    let value = entity.strip_prefix("&#")?.strip_suffix(';')?;
+    let codepoint = if let Some(hex) =
+        value.strip_prefix('x').or_else(|| value.strip_prefix('X'))
+    {
+        u32::from_str_radix(hex, 16).ok()?
+    } else {
+        value.parse::<u32>().ok()?
+    };
+    char::from_u32(codepoint)
+}
+
 #[derive(Debug)]
 struct EdgeDesc {
     from: String,
@@ -310,7 +355,9 @@ impl GraphBuilder {
                 if val.is_empty() {
                     Option::None
                 } else {
-                    Option::Some(ShapeContent::String(val.clone()))
+                    Option::Some(ShapeContent::String(
+                        decode_quoted_label_entities(val),
+                    ))
                 }
             }
             DotString::HtmlString(val) => Option::Some(ShapeContent::Html(
@@ -350,9 +397,10 @@ impl GraphBuilder {
             // label = val.clone();
             match x {
                 DotString::String(val) => {
-                    label = ShapeContent::String(val.clone());
+                    let decoded_label = decode_quoted_label_entities(val);
+                    label = ShapeContent::String(decoded_label.clone());
                     shape =
-                        ShapeKind::Circle(ShapeContent::String(val.clone()));
+                        ShapeKind::Circle(ShapeContent::String(decoded_label));
                 }
                 DotString::HtmlString(val) => {
                     label = ShapeContent::Html(parse_html_string(val).unwrap());

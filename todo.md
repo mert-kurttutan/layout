@@ -31,21 +31,6 @@ Required changes:
 - If embedding, extend `get_image_size`/image utilities to read bytes and MIME type, then make `SVGWriter::draw_image` emit `data:image/png;base64,...`.
 - Add tests for output written outside the repo.
 
-### Decode HTML entities
-
-Current state:
-
-- DOT HTML content is stored raw in `DotString::HtmlString`.
-- `layout/src/gv/html.rs` treats text like `&amp;` as literal text.
-- `SVGWriter::draw_text` escapes output text, so raw `&amp;` can become `&amp;amp;` in SVG.
-
-Required changes:
-
-- Add entity decoding in the HTML parser text path, likely in `HtmlParser::read_html_text`.
-- Support at least XML built-ins: `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`.
-- Consider numeric entities (`&#123;`, `&#x7b;`) and Graphviz-supported named entities as follow-up scope.
-- Add tests that render `A &amp; B` as `A &amp; B` in SVG source, not `A &amp;amp; B`.
-
 ### Render or document parsed-but-unused HTML attributes
 
 Current state:

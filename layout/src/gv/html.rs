@@ -27,6 +27,18 @@ fn to_error<T>(str: &str) -> Result<T, String> {
     Result::Err(str.to_string())
 }
 
+fn decode_html_entity(entity: &str) -> Option<char> {
+    match entity {
+        "&amp;" => Some('&'),
+        "&lt;" => Some('<'),
+        "&gt;" => Some('>'),
+        "&quot;" => Some('"'),
+        "&apos;" => Some('\''),
+        "&nbsp;" => Some('\u{00a0}'),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone)]
 struct HtmlParser {
     input: Vec<char>,
@@ -390,12 +402,47 @@ impl HtmlParser {
     fn read_html_text(&mut self) -> Token {
         let mut result = String::new();
         while self.ch != '<' && self.ch != '\0' && self.ch != '>' {
-            result.push(self.ch);
-            self.read_char();
+            if self.ch == '&' {
+                match self.read_html_entity() {
+                    Ok(entity) => result.push_str(&entity),
+                    Err(pos) => return Token::Error(pos),
+                }
+            } else {
+                result.push(self.ch);
+                self.read_char();
+            }
             // escape new line
         }
         Token::Identifier(result)
     }
+
+    fn read_html_entity(&mut self) -> Result<String, usize> {
+        let start_pos = self.pos.saturating_sub(1);
+        let mut entity = String::new();
+        entity.push(self.ch);
+        self.read_char();
+
+        while self.ch != ';'
+            && self.ch != '<'
+            && self.ch != '>'
+            && self.ch != '\0'
+            && !self.ch.is_ascii_whitespace()
+        {
+            entity.push(self.ch);
+            self.read_char();
+        }
+
+        if self.ch == ';' {
+            entity.push(self.ch);
+            self.read_char();
+            return decode_html_entity(&entity)
+                .map(|c| c.to_string())
+                .ok_or(start_pos);
+        }
+
+        Err(start_pos)
+    }
+
     fn read_html(&mut self) -> Token {
         let mut tag_name = String::new();
         if self.ch == '\0' {

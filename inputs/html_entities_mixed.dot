@@ -1,0 +1,11 @@
+digraph G {
+  node [shape=plain]
+
+  a [label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+      <TR><TD>prefix&amp;middle&lt;suffix&gt;</TD></TR>
+      <TR><TD>before &quot;quoted&quot; after</TD></TR>
+      <TR><TD>apostrophe &apos;text&apos; done</TD></TR>
+    </TABLE>
+  >]
+}

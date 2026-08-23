@@ -339,6 +339,75 @@ mod tests {
     }
 
     #[test]
+    fn render_html_entities() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+                        <TR><TD>A &amp; B</TD></TR>
+                        <TR><TD>1 &lt; 2 &gt; 0</TD></TR>
+                        <TR><TD>&quot;quoted&quot; &apos;text&apos;</TD></TR>
+                        <TR><TD>&lt;&gt;&amp;&quot;&apos;</TD></TR>
+                        <TR><TD>prefix&amp;middle&lt;suffix&gt;</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains(">A &amp; B</tspan>"));
+        assert!(svg.contains(">1 &lt; 2 &gt; 0</tspan>"));
+        assert!(svg.contains(">&quot;quoted&quot; &apos;text&apos;</tspan>"));
+        assert!(svg.contains(">&lt;&gt;&amp;&quot;&apos;</tspan>"));
+        assert!(svg.contains(">prefix&amp;middle&lt;suffix&gt;</tspan>"));
+        assert!(!svg.contains("&amp;amp;"));
+        assert!(!svg.contains("&amp;lt;"));
+        assert!(!svg.contains("&amp;gt;"));
+        assert!(!svg.contains("&amp;quot;"));
+        assert!(!svg.contains("&amp;apos;"));
+    }
+
+    #[test]
+    #[should_panic]
+    fn render_html_unknown_entity_panics() {
+        render_dot(r#"digraph { a [label=<unknown &madeup; entity>]; }"#);
+    }
+
+    #[test]
+    #[should_panic]
+    fn render_html_missing_entity_semicolon_panics() {
+        render_dot(r#"digraph { a [label=<missing &amp semicolon>]; }"#);
+    }
+
+    #[test]
+    #[should_panic]
+    fn render_html_numeric_entity_panics() {
+        render_dot(r#"digraph { a [label=<numeric &#65; entity>]; }"#);
+    }
+
+    #[test]
+    fn render_quoted_label_non_ascii_entities() {
+        let svg = render_dot(
+            r#"digraph {
+                a [label="forall: &#8704;"];
+                b [label="hex forall: &#x2200;"];
+                a -> b [
+                    label="edge: &#8704;",
+                    headlabel="head: &#8704;",
+                    taillabel="tail: &#x2200;"
+                ];
+            }"#,
+        );
+
+        assert!(svg.contains("forall: \u{2200}</tspan>"));
+        assert!(svg.contains("hex forall: \u{2200}</tspan>"));
+        assert!(svg.contains("edge: \u{2200}</tspan>"));
+        assert!(svg.contains("head: \u{2200}</tspan>"));
+        assert!(svg.contains("tail: \u{2200}</tspan>"));
+        assert!(!svg.contains("&amp;#8704;"));
+        assert!(!svg.contains("&amp;#x2200;"));
+    }
+
+    #[test]
     fn render_head_and_tail_labels() {
         let svg = render_dot(
             r#"digraph {

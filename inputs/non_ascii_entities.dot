@@ -1,0 +1,9 @@
+digraph G {
+  a [label="forall: &#8704;"]
+  b [label="hex forall: &#x2200;"]
+  a -> b [
+    label="edge: &#8704;"
+    headlabel="head: &#8704;"
+    taillabel="tail: &#x2200;"
+  ]
+}

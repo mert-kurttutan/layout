@@ -1,0 +1,19 @@
+digraph G {
+  node [shape=plain]
+
+  // This file intentionally contains invalid HTML entities and should fail.
+  a [label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+      <TR><TD>unknown named: &madeup;</TD></TR>
+      <TR><TD>missing semicolon: &amp still literal</TD></TR>
+      <TR><TD>bare amp before whitespace: A & B</TD></TR>
+      <TR><TD>bare amp before tag: A &<B>tag</B></TD></TR>
+      <TR><TD>numeric decimal unsupported in HTML labels: &#65;</TD></TR>
+      <TR><TD>numeric hex lower unsupported in HTML labels: &#x41;</TD></TR>
+      <TR><TD>numeric hex upper unsupported in HTML labels: &#X42;</TD></TR>
+      <TR><TD>malformed numeric empty: &#;</TD></TR>
+      <TR><TD>malformed numeric hex empty: &#x;</TD></TR>
+      <TR><TD>malformed numeric text: &#notnum;</TD></TR>
+    </TABLE>
+  >]
+}

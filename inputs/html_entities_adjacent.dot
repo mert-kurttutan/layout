@@ -1,0 +1,10 @@
+digraph G {
+  node [shape=plain]
+
+  a [label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+      <TR><TD>&lt;&gt;&amp;&quot;&apos;</TD></TR>
+      <TR><TD>&amp;&amp;&lt;&lt;&gt;&gt;</TD></TR>
+    </TABLE>
+  >]
+}

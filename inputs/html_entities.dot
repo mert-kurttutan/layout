@@ -1,0 +1,16 @@
+digraph G {
+  node [shape=plain]
+
+  a [
+    label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+        <TR><TD>A &amp; B</TD></TR>
+        <TR><TD>1 &lt; 2 &gt; 0</TD></TR>
+        <TR><TD>&quot;quoted&quot; &apos;text&apos;</TD></TR>
+        <TR><TD>&lt;&gt;&amp;&quot;&apos;</TD></TR>
+        <TR><TD>prefix&amp;middle&lt;suffix&gt;</TD></TR>
+        <TR><TD>nbsp A&nbsp;B</TD></TR>
+      </TABLE>
+    >
+  ]
+}
