@@ -31,21 +31,6 @@ Required changes:
 - If embedding, extend `get_image_size`/image utilities to read bytes and MIME type, then make `SVGWriter::draw_image` emit `data:image/png;base64,...`.
 - Add tests for output written outside the repo.
 
-### Render `headlabel` and `taillabel`
-
-Current state:
-
-- The parser can store these attributes as plain or HTML `DotString`.
-- `GraphBuilder::get_arrow_from_attributes` ignores `headlabel` and `taillabel`.
-- `Arrow` only has one central label field.
-
-Required changes:
-
-- Extend `Arrow` with optional head and tail label fields.
-- Decide layout semantics: labels should be placed near destination/source ends, not on the midpoint text path.
-- Update `render_arrow` or add generated label elements during graph lowering.
-- Add tests for plain and HTML `headlabel`/`taillabel`.
-
 ### Decode HTML entities
 
 Current state:

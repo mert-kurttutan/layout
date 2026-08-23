@@ -240,22 +240,21 @@ impl GraphBuilder {
             LineEndKind::None
         };
         let mut label = Option::None;
+        let mut head_label = Option::None;
+        let mut tail_label = Option::None;
         let mut color = String::from("black");
         let mut line_style = LineStyleKind::Normal;
 
         if let Option::Some(val) = lst.get(&"label".to_string()) {
-            match val {
-                DotString::String(val) => {
-                    if !val.is_empty() {
-                        label = Option::Some(ShapeContent::String(val.clone()));
-                    }
-                }
-                DotString::HtmlString(val) => {
-                    label = Option::Some(ShapeContent::Html(
-                        parse_html_string(val).unwrap(),
-                    ));
-                }
-            }
+            label = Self::get_label_content(val);
+        }
+
+        if let Option::Some(val) = lst.get(&"headlabel".to_string()) {
+            head_label = Self::get_label_content(val);
+        }
+
+        if let Option::Some(val) = lst.get(&"taillabel".to_string()) {
+            tail_label = Self::get_label_content(val);
         }
 
         if let Option::Some(DotString::String(stl)) =
@@ -297,9 +296,27 @@ impl GraphBuilder {
 
         let color = Color::fast(&color);
         let look = StyleAttr::new(color, line_width, None, 0, font_size);
-        Arrow::new_with_content(
+        let mut arrow = Arrow::new_with_content(
             start, end, line_style, label, &look, &from_port, &to_port,
-        )
+        );
+        arrow.head_label = head_label;
+        arrow.tail_label = tail_label;
+        arrow
+    }
+
+    fn get_label_content(val: &DotString) -> Option<ShapeContent> {
+        match val {
+            DotString::String(val) => {
+                if val.is_empty() {
+                    Option::None
+                } else {
+                    Option::Some(ShapeContent::String(val.clone()))
+                }
+            }
+            DotString::HtmlString(val) => Option::Some(ShapeContent::Html(
+                parse_html_string(val).unwrap(),
+            )),
+        }
     }
 
     /// Convert the color to some color that we can handle.

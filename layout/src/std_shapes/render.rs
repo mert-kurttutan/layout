@@ -555,6 +555,45 @@ fn draw_shape_content(
     }
 }
 
+fn content_size(content: &ShapeContent, font_size: usize) -> Point {
+    match content {
+        ShapeContent::String(text) => get_size_for_str(text, font_size),
+        ShapeContent::Html(html) => html.size(font_size),
+    }
+}
+
+fn endpoint_label_position(
+    endpoint: Point,
+    control: Point,
+    label_size: Point,
+    label_offset: f64,
+) -> Point {
+    let dx = endpoint.x - control.x;
+    let dy = endpoint.y - control.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    let (nx, ny) = if len == 0. {
+        (0., -1.)
+    } else {
+        (-dy / len, dx / len)
+    };
+    endpoint.add(Point::new(
+        nx * label_offset,
+        ny * label_offset - label_size.y * 0.5,
+    ))
+}
+
+fn render_endpoint_label(
+    canvas: &mut dyn RenderBackend,
+    label: &ShapeContent,
+    endpoint: Point,
+    control: Point,
+    look: &StyleAttr,
+) {
+    let size = content_size(label, look.font_size);
+    let loc = endpoint_label_position(endpoint, control, size, 22.);
+    draw_shape_content(label, loc, size, look, canvas);
+}
+
 impl Renderable for Element {
     fn render(&self, debug: bool, canvas: &mut dyn RenderBackend) {
         if debug {
@@ -943,4 +982,14 @@ pub fn render_arrow(
         arrow.properties.clone(),
         text,
     );
+
+    if let Option::Some(label) = &arrow.tail_label {
+        render_endpoint_label(canvas, label, path[0].0, path[0].1, &arrow.look);
+    }
+
+    if let Option::Some(label) = &arrow.head_label {
+        if let Option::Some(last) = path.last() {
+            render_endpoint_label(canvas, label, last.1, last.0, &arrow.look);
+        }
+    }
 }

@@ -1,0 +1,12 @@
+digraph G {
+  rankdir=LR
+
+  a [label="source"]
+  b [label="target"]
+
+  a -> b [
+    label="middle"
+    taillabel="near source"
+    headlabel="near target"
+  ]
+}

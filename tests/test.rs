@@ -339,6 +339,45 @@ mod tests {
     }
 
     #[test]
+    fn render_head_and_tail_labels() {
+        let svg = render_dot(
+            r#"digraph {
+                a [label="source"];
+                b [label="target"];
+                a -> b [
+                    label="middle",
+                    taillabel="near source",
+                    headlabel="near target"
+                ];
+            }"#,
+        );
+
+        assert!(svg.contains(">middle</tspan>"));
+        assert!(svg.contains(">near source</tspan>"));
+        assert!(svg.contains(">near target</tspan>"));
+    }
+
+    #[test]
+    fn render_html_head_and_tail_labels() {
+        let svg = render_dot(
+            r#"digraph {
+                a [label="source"];
+                b [label="target"];
+                a -> b [
+                    taillabel=<near <I>source</I>>,
+                    headlabel=<near <B>target</B>>
+                ];
+            }"#,
+        );
+
+        assert!(svg.contains(">near </tspan>"));
+        assert!(svg.contains(">source</tspan>"));
+        assert!(svg.contains(">target</tspan>"));
+        assert!(svg.contains("font-style=\"italic\""));
+        assert!(svg.contains("font-weight=\"bold\""));
+    }
+
+    #[test]
     fn parse_record0() {
         let desc = "hello&#92;nworld |{ b |{c|<here> d|e}| f}| g | h";
         let res = parse_record_string(desc);
