@@ -56,11 +56,48 @@ pub trait Renderable {
 
 pub type ClipHandle = usize;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RectSides {
+    pub left: bool,
+    pub right: bool,
+    pub top: bool,
+    pub bottom: bool,
+}
+
+impl RectSides {
+    pub fn all() -> Self {
+        Self {
+            left: true,
+            right: true,
+            top: true,
+            bottom: true,
+        }
+    }
+
+    pub fn none() -> Self {
+        Self {
+            left: false,
+            right: false,
+            top: false,
+            bottom: false,
+        }
+    }
+
+    pub fn is_all(&self) -> bool {
+        self.left && self.right && self.top && self.bottom
+    }
+
+    pub fn is_none(&self) -> bool {
+        !self.left && !self.right && !self.top && !self.bottom
+    }
+}
+
 /// This is the trait that all rendering backends need to implement.
 pub trait RenderBackend {
     /// Draw a rectangle. The top-left point of the rectangle is \p xy. The shape
     /// style (color, edge-width) are passed in \p look. The parameter \p clip
-    /// is an optional clip region (see: create_clip).
+    /// is an optional clip region (see: create_clip). The \p sides parameter
+    /// controls which rectangle border sides are stroked.
     fn draw_rect(
         &mut self,
         xy: Point,
@@ -68,6 +105,7 @@ pub trait RenderBackend {
         look: &StyleAttr,
         properties: Option<String>,
         clip: Option<ClipHandle>,
+        sides: RectSides,
     );
 
     /// Draw a line between \p start and \p stop.

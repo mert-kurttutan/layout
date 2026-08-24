@@ -336,6 +336,75 @@ mod tests {
     }
 
     #[test]
+    fn render_html_cell_sides_as_rect_mask() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="0">
+                        <TR><TD SIDES="L">left</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert_eq!(svg.matches("<line").count(), 0);
+        assert!(svg.contains("<path d=\""));
+        assert!(svg.contains(">left</tspan>"));
+    }
+
+    #[test]
+    fn render_html_fixedsize_cell_respects_width_height() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="0">
+                        <TR><TD WIDTH="80" HEIGHT="40" FIXEDSIZE="TRUE">x</TD></TR>
+                        <TR><TD WIDTH="140">wider</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains("width=\"79\""));
+        assert!(svg.contains("height=\"39\""));
+        assert!(svg.contains(">x</tspan>"));
+        assert!(svg.contains(">wider</tspan>"));
+    }
+
+    #[test]
+    fn render_html_gradientangle_is_parsed_but_unsupported() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="1" CELLBORDER="1" GRADIENTANGLE="45">
+                        <TR><TD GRADIENTANGLE="90">gradientangle</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains(">gradientangle</tspan>"));
+        assert!(!svg.contains("<linearGradient"));
+    }
+
+    #[test]
+    fn render_html_cell_bgcolor_overrides_table_bgcolor() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="1" CELLBORDER="1" BGCOLOR="lightblue">
+                        <TR><TD BGCOLOR="lightpink">cell color</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains("fill=\"#add8e6ff\""));
+        assert!(svg.contains("fill=\"#ffb6c1ff\""));
+        assert!(svg.contains(">cell color</tspan>"));
+    }
+
+    #[test]
     fn render_html_edge_label() {
         let svg = render_dot(
             r#"digraph {

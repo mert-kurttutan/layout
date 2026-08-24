@@ -1,12 +1,14 @@
 //! Implements the drawing of elements and arrows on the backing canvas.
 
 use crate::core::base::Orientation;
-use crate::core::format::{ClipHandle, RenderBackend, Renderable, Visible};
+use crate::core::format::{
+    ClipHandle, RectSides, RenderBackend, Renderable, Visible,
+};
 use crate::core::geometry::*;
 use crate::core::style::{Align, LineStyleKind, StyleAttr, VAlign};
 use crate::gv::html::{
-    get_line_height, DotCellGrid, HtmlGrid, LabelOrImgGrid, Scale, TableGrid,
-    TextGrid,
+    get_line_height, DotCellGrid, HtmlGrid, LabelOrImgGrid, Scale, Sides,
+    TableGrid, TextGrid,
 };
 use crate::std_shapes::shapes::*;
 
@@ -245,6 +247,7 @@ fn render_record(
                 &self.look,
                 Option::None,
                 self.clip_handle,
+                RectSides::all(),
             );
         }
         fn handle_text(
@@ -275,6 +278,7 @@ fn render_record(
         &look,
         Option::None,
         Option::None,
+        RectSides::all(),
     );
 }
 
@@ -379,12 +383,14 @@ fn render_font_table(
         &look,
         Option::None,
         Option::None,
+        rect_sides_from_html(rec.table_attr.sides.as_ref()),
     );
 
     for (td_attr, c) in rec.cells.iter() {
         let cellpadding = rec.cellpadding(c);
         let cellborder = rec.cellborder(c);
         let cell_size = rec.cell_size(c);
+        let cell_render_size = rec.cell_render_size(c);
         let cell_origin = rec.cell_pos(c);
 
         // center of the cell
@@ -394,27 +400,37 @@ fn render_font_table(
         );
         let look_cell = td_attr.build_style_attr(&look);
 
-        let mut look_cell_border = look.clone();
+        let mut look_cell_border = look_cell.clone();
         look_cell_border.line_width = cellborder as usize;
 
         canvas.draw_rect(
             Point::new(
-                loc_0.x + cell_origin.x + cellborder * 0.5,
-                loc_0.y + cell_origin.y + cellborder * 0.5,
+                cell_loc.x - cell_render_size.x * 0.5 + cellborder * 0.5,
+                cell_loc.y - cell_render_size.y * 0.5 + cellborder * 0.5,
             ),
-            cell_size.sub(Point::splat(cellborder)),
+            cell_render_size.sub(Point::splat(cellborder)),
             &look_cell_border,
             Option::None,
             Option::None,
+            rect_sides_from_html(rec.cell_sides(c)),
         );
 
         // cell inside
         let size = Point::new(
-            cell_size.x - cellborder * 2. - cellpadding * 2.,
-            cell_size.y - cellborder * 2. - cellpadding * 2.,
+            cell_render_size.x - cellborder * 2. - cellpadding * 2.,
+            cell_render_size.y - cellborder * 2. - cellpadding * 2.,
         );
         render_cell(&c, cell_loc, size, &look_cell, canvas);
     }
+}
+
+fn rect_sides_from_html(sides: Option<&Sides>) -> RectSides {
+    sides.map_or_else(RectSides::all, |sides| RectSides {
+        left: sides.left,
+        right: sides.right,
+        top: sides.top,
+        bottom: sides.bottom,
+    })
 }
 
 fn render_cell(
@@ -616,6 +632,7 @@ impl Renderable for Element {
                 &debug_look,
                 self.properties.clone(),
                 Option::None,
+                RectSides::all(),
             );
         }
 
@@ -646,6 +663,7 @@ impl Renderable for Element {
                     &self.look,
                     self.properties.clone(),
                     Option::None,
+                    RectSides::all(),
                 );
                 draw_shape_content(
                     text,
@@ -705,6 +723,7 @@ impl Renderable for Element {
                         &StyleAttr::debug0(),
                         Option::None,
                         Option::None,
+                        RectSides::all(),
                     );
 
                     canvas.draw_rect(
@@ -713,6 +732,7 @@ impl Renderable for Element {
                         &StyleAttr::debug1(),
                         Option::None,
                         Option::None,
+                        RectSides::all(),
                     );
                 }
                 if let Option::Some(label) = label {
@@ -733,6 +753,7 @@ impl Renderable for Element {
                     &self.look,
                     self.properties.clone(),
                     Option::None,
+                    RectSides::all(),
                 );
                 if let Some(label) = label {
                     let text_size = content_size(label, self.look.font_size);

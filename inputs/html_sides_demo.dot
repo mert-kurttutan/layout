@@ -1,0 +1,23 @@
+digraph HtmlSidesDemo {
+    label="HTML SIDES Demo";
+    labelloc=t;
+
+    node [shape=plain];
+
+    all_sides [label=<
+        <TABLE BORDER="1" CELLBORDER="1" CELLSPACING="8" CELLPADDING="8">
+            <TR>
+                <TD SIDES="L">left only</TD>
+                <TD SIDES="R">right only</TD>
+                <TD SIDES="T">top only</TD>
+                <TD SIDES="B">bottom only</TD>
+            </TR>
+            <TR>
+                <TD SIDES="LR">left+right</TD>
+                <TD SIDES="TB">top+bottom</TD>
+                <TD SIDES="LTRB">all sides</TD>
+                <TD SIDES="">no sides</TD>
+            </TR>
+        </TABLE>
+    >];
+}

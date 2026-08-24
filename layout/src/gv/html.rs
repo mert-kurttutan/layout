@@ -236,7 +236,7 @@ pub(crate) struct TdAttr {
     height: Option<u16>, // value
     width: Option<u16>,  // value
     fixedsize: bool,     // FALSE|TRUE
-    sides: Sides,
+    sides: Option<Sides>,
 
     // Full inheritance on bgcolor, use only if set
     bgcolor: Option<String>, // color
@@ -278,14 +278,14 @@ struct Hr {}
 #[derive(Debug, Clone)]
 pub(crate) struct TableAttr {
     // No inheritance on align, use the most recent value
-    align: Align,                  // CENTER|LEFT|RIGHT
-    valign: VAlign,                // MIDDLE|BOTTOM|TOP
-    sides: Sides,                  // value
-    height: Option<u16>,           // value
-    width: Option<u16>,            // value
-    columns: Option<ColumnFormat>, // value
-    rows: Option<RowFormat>,       // value
-    fixedsize: bool,               // FALSE|TRUE
+    align: Align,                    // CENTER|LEFT|RIGHT
+    valign: VAlign,                  // MIDDLE|BOTTOM|TOP
+    pub(crate) sides: Option<Sides>, // value
+    height: Option<u16>,             // value
+    width: Option<u16>,              // value
+    columns: Option<ColumnFormat>,   // value
+    rows: Option<RowFormat>,         // value
+    fixedsize: bool,                 // FALSE|TRUE
 
     // Full inheritance on bgcolor, use only if set
     color: Option<Color>,   // color
@@ -308,11 +308,11 @@ pub(crate) struct TableAttr {
 }
 
 #[derive(Debug, Clone)]
-struct Sides {
-    left: bool,
-    right: bool,
-    top: bool,
-    bottom: bool,
+pub(crate) struct Sides {
+    pub(crate) left: bool,
+    pub(crate) right: bool,
+    pub(crate) top: bool,
+    pub(crate) bottom: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1028,7 +1028,7 @@ impl TdAttr {
             id: None,
             port: None,
             rowspan: 1,
-            sides: Sides::from_str(""),
+            sides: None,
             style: None,
             target: None,
             title: None,
@@ -1075,7 +1075,7 @@ impl TdAttr {
             "id" => self.id = Some(value.to_string()),
             "port" => self.port = Some(value.to_string()),
             "rowspan" => self.rowspan = value.parse().unwrap_or(1),
-            "sides" => self.sides = Sides::from_str(value),
+            "sides" => self.sides = Some(Sides::from_str(value)),
             "style" => self.style = Some(value.to_string()),
             "target" => self.target = Some(value.to_string()),
             "title" => self.title = Some(value.to_string()),
@@ -1134,7 +1134,7 @@ impl Sides {
             bottom: false,
         };
         for c in s.chars() {
-            match c {
+            match c.to_ascii_uppercase() {
                 'L' => sides.left = true,
                 'R' => sides.right = true,
                 'T' => sides.top = true,
@@ -1164,7 +1164,7 @@ impl TableAttr {
             id: None,
             port: None,
             rows: None,
-            sides: Sides::from_str(""),
+            sides: None,
             style: None,
             target: None,
             title: None,
@@ -1221,7 +1221,7 @@ impl TableAttr {
             "id" => self.id = Some(value.to_string()),
             "port" => self.port = Some(value.to_string()),
             "rows" => self.rows = Some(RowFormat::from_str(value)),
-            "sides" => self.sides = Sides::from_str(value),
+            "sides" => self.sides = Some(Sides::from_str(value)),
             "style" => self.style = Some(value.to_string()),
             "target" => self.target = Some(value.to_string()),
             "title" => self.title = Some(value.to_string()),
@@ -1691,6 +1691,22 @@ impl TableGrid {
         Point::new(width, height)
     }
 
+    pub(crate) fn cell_render_size(
+        &self,
+        dot_cell_grid: &DotCellGrid,
+    ) -> Point {
+        let mut size = self.cell_size(dot_cell_grid);
+        if dot_cell_grid.td_attr.fixedsize {
+            if let Some(width) = dot_cell_grid.td_attr.width {
+                size.x = width as f64;
+            }
+            if let Some(height) = dot_cell_grid.td_attr.height {
+                size.y = height as f64;
+            }
+        }
+        size
+    }
+
     fn from_table(font_table: &FontTable) -> Self {
         let table_hash_grid = TableHashGrid::from_table(font_table);
         let width_in_cell = table_hash_grid.width();
@@ -1763,6 +1779,13 @@ impl TableGrid {
         cellborder
     }
 
+    pub(crate) fn cell_sides<'a>(
+        &'a self,
+        d: &'a DotCellGrid,
+    ) -> Option<&'a Sides> {
+        d.td_attr.sides.as_ref()
+    }
+
     pub(crate) fn resize(&mut self, font_size: usize) {
         // TODO: can check if font size is updated
         for x in 0..self.width_in_cell {
@@ -1789,7 +1812,15 @@ impl TableGrid {
                     let cellpadding = self.cellpadding(cell);
                     let cellborder = self.cellborder(cell);
 
-                    let w = w + cellborder * 2.0 + cellpadding * 2.0;
+                    let mut w = w + cellborder * 2.0 + cellpadding * 2.0;
+                    if let Some(width) = cell.td_attr.width {
+                        let width = width as f64;
+                        w = if cell.td_attr.fixedsize {
+                            width
+                        } else {
+                            w.max(width)
+                        };
+                    }
 
                     max_width = max_width.max(w / cell.width_in_cell as f64);
                 }
@@ -1812,7 +1843,15 @@ impl TableGrid {
                     let cellpadding = self.cellpadding(cell);
                     let cellborder = self.cellborder(cell);
 
-                    let h = h + cellborder * 2.0 + cellpadding * 2.0;
+                    let mut h = h + cellborder * 2.0 + cellpadding * 2.0;
+                    if let Some(height) = cell.td_attr.height {
+                        let height = height as f64;
+                        h = if cell.td_attr.fixedsize {
+                            height
+                        } else {
+                            h.max(height)
+                        };
+                    }
 
                     max_height = max_height.max(h / cell.height_in_cell as f64);
                 }
@@ -1820,8 +1859,35 @@ impl TableGrid {
             self.height_arr[y] = max_height;
         }
 
+        self.apply_table_requested_size();
+
         // update the font size
         self.font_size = font_size;
+    }
+
+    fn apply_table_requested_size(&mut self) {
+        if let Some(width) = self.table_attr.width {
+            let requested_width = width as f64
+                - (self.table_attr.cellspacing as usize
+                    * (self.width_in_cell + 1)) as f64
+                - self.table_attr.border as f64 * 2.;
+            resize_tracks(
+                &mut self.width_arr,
+                requested_width,
+                self.table_attr.fixedsize,
+            );
+        }
+        if let Some(height) = self.table_attr.height {
+            let requested_height = height as f64
+                - (self.table_attr.cellspacing as usize
+                    * (self.height_in_cell + 1)) as f64
+                - self.table_attr.border as f64 * 2.;
+            resize_tracks(
+                &mut self.height_arr,
+                requested_height,
+                self.table_attr.fixedsize,
+            );
+        }
     }
 
     pub(crate) fn build_style_attr(&self, style_attr: &StyleAttr) -> StyleAttr {
@@ -1861,5 +1927,31 @@ impl TableGrid {
         }
 
         style_attr
+    }
+}
+
+fn resize_tracks(tracks: &mut [f64], requested: f64, fixedsize: bool) {
+    if tracks.is_empty() || requested <= 0. {
+        return;
+    }
+
+    let current = tracks.iter().sum::<f64>();
+    if fixedsize {
+        if current > 0. {
+            let scale = requested / current;
+            for track in tracks {
+                *track *= scale;
+            }
+        } else {
+            let track_size = requested / tracks.len() as f64;
+            for track in tracks {
+                *track = track_size;
+            }
+        }
+    } else if requested > current {
+        let extra = (requested - current) / tracks.len() as f64;
+        for track in tracks {
+            *track += extra;
+        }
     }
 }

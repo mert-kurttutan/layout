@@ -1,0 +1,19 @@
+digraph HtmlFixedSizeDemo {
+    label="HTML FIXEDSIZE WIDTH HEIGHT Demo";
+    labelloc=t;
+
+    node [shape=plain];
+
+    fixed [label=<
+        <TABLE BORDER="1" CELLBORDER="1" CELLSPACING="8" CELLPADDING="4">
+            <TR>
+                <TD WIDTH="80" HEIGHT="40" FIXEDSIZE="TRUE">80 x 40 fixed</TD>
+                <TD WIDTH="80" HEIGHT="40" FIXEDSIZE="FALSE">80 x 40 flexible content can expand</TD>
+            </TR>
+            <TR>
+                <TD WIDTH="140">width only</TD>
+                <TD HEIGHT="60">height only</TD>
+            </TR>
+        </TABLE>
+    >];
+}

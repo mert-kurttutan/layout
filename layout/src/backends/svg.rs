@@ -1,7 +1,7 @@
 //! SVG rendering backend that accepts draw calls and saves the output to a file.
 
 use crate::core::color::Color;
-use crate::core::format::{ClipHandle, RenderBackend};
+use crate::core::format::{ClipHandle, RectSides, RenderBackend};
 use crate::core::geometry::{get_size_for_str, Point};
 use crate::core::style::{StyleAttr, TextDecoration};
 use std::collections::HashMap;
@@ -175,6 +175,7 @@ impl RenderBackend for SVGWriter {
         look: &StyleAttr,
         properties: Option<String>,
         clip: Option<ClipHandle>,
+        sides: RectSides,
     ) {
         self.grow_window(xy, size);
 
@@ -187,20 +188,82 @@ impl RenderBackend for SVGWriter {
         let stroke_width = look.line_width;
         let stroke_color = look.line_color;
         let rounded_px = look.rounded;
+        if sides.is_all() || sides.is_none() {
+            let line1 = format!(
+                "<g {props}>\n
+                <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" 
+                stroke-width=\"{}\" stroke=\"{}\" rx=\"{}\" {} />\n
+                </g>\n",
+                xy.x,
+                xy.y,
+                size.x,
+                size.y,
+                fill_color.to_web_color(),
+                stroke_width,
+                stroke_color.to_web_color(),
+                rounded_px,
+                clip_option
+            );
+            self.content.push_str(&line1);
+            return;
+        }
+
+        if stroke_width == 0 {
+            let line1 = format!(
+                "<g {props}>\n
+                <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" 
+                stroke-width=\"0\" stroke=\"transparent\" rx=\"{}\" {} />\n
+                </g>\n",
+                xy.x,
+                xy.y,
+                size.x,
+                size.y,
+                fill_color.to_web_color(),
+                rounded_px,
+                clip_option
+            );
+            self.content.push_str(&line1);
+            return;
+        }
+
+        let x0 = xy.x;
+        let y0 = xy.y;
+        let x1 = xy.x + size.x;
+        let y1 = xy.y + size.y;
+        let mut path = String::new();
+        if sides.top {
+            path.push_str(&format!("M {} {} L {} {} ", x0, y0, x1, y0));
+        }
+        if sides.right {
+            path.push_str(&format!("M {} {} L {} {} ", x1, y0, x1, y1));
+        }
+        if sides.bottom {
+            path.push_str(&format!("M {} {} L {} {} ", x0, y1, x1, y1));
+        }
+        if sides.left {
+            path.push_str(&format!("M {} {} L {} {} ", x0, y0, x0, y1));
+        }
+        let stroke = format!(
+            "<path d=\"{}\" fill=\"transparent\" stroke-width=\"{}\" stroke=\"{}\" {} />\n",
+            path,
+            stroke_width,
+            stroke_color.to_web_color(),
+            clip_option
+        );
         let line1 = format!(
             "<g {props}>\n
             <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" 
-            stroke-width=\"{}\" stroke=\"{}\" rx=\"{}\" {} />\n
+            stroke-width=\"0\" stroke=\"transparent\" rx=\"{}\" {} />\n
+            {}
             </g>\n",
             xy.x,
             xy.y,
             size.x,
             size.y,
             fill_color.to_web_color(),
-            stroke_width,
-            stroke_color.to_web_color(),
             rounded_px,
-            clip_option
+            clip_option,
+            stroke
         );
         self.content.push_str(&line1);
     }

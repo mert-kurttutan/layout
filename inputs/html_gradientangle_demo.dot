@@ -1,0 +1,15 @@
+digraph HtmlGradientAngleDemo {
+    label="HTML GRADIENTANGLE Demo";
+    labelloc=t;
+
+    node [shape=plain];
+
+    gradient [label=<
+        <TABLE BORDER="1" CELLBORDER="1" CELLSPACING="8" CELLPADDING="8" BGCOLOR="lightblue" GRADIENTANGLE="45">
+            <TR>
+                <TD BGCOLOR="lightpink" GRADIENTANGLE="90">gradientangle ignored</TD>
+                <TD>plain cell</TD>
+            </TR>
+        </TABLE>
+    >];
+}

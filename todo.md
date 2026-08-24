@@ -35,18 +35,17 @@ Required changes:
 
 Current state:
 
-- `layout/src/gv/html.rs` parses/stores `href`, `id`, `target`, `tooltip`, `sides`, `fixedsize`, and `gradientangle` on table/cell attributes.
+- `layout/src/gv/html.rs` parses/stores `href`, `id`, `target`, `tooltip`, and `gradientangle` on table/cell attributes.
 - Rendering mostly ignores them in `layout/src/std_shapes/render.rs`.
 - SVG primitives already accept raw `properties: Option<String>` in `layout/src/core/format.rs` and `layout/src/backends/svg.rs`.
+- `SIDES` is rendered as selective border lines, and `FIXEDSIZE`/`WIDTH`/`HEIGHT` participate in table sizing.
+- `GRADIENTANGLE` is intentionally unsupported for now; no SVG gradient definitions are emitted.
 
 Required changes:
 
 - For `id`, `href`, `target`, and `tooltip`, build SVG-safe property strings and pass them into `draw_rect`, `draw_text`, or wrapper groups.
 - Escape attribute values before inserting them into SVG. Current `properties` strings are raw.
-- For `sides`, change table/cell border rendering from one `draw_rect` to selective line drawing.
-- For `fixedsize`, make table/cell sizing respect explicit `WIDTH`/`HEIGHT` and clipping/overflow rules.
-- For `gradientangle`, decide whether to implement SVG gradients or explicitly document it as unsupported.
-- Add per-attribute tests that inspect SVG output.
+- Add per-attribute tests that inspect SVG output for `id`, `href`, `target`, and `tooltip`.
 
 ### Improve malformed HTML error handling
 
