@@ -3,7 +3,7 @@
 use crate::core::color::Color;
 use crate::core::format::{ClipHandle, RectSides, RenderBackend};
 use crate::core::geometry::{get_size_for_str, Point};
-use crate::core::style::{StyleAttr, TextDecoration};
+use crate::core::style::{FillGradient, StyleAttr, TextDecoration};
 use std::collections::HashMap;
 
 static SVG_HEADER: &str =
@@ -48,6 +48,55 @@ fn escape_string(x: &str) -> String {
         }
     }
     res
+}
+
+fn svg_linear_gradient_def(id: &str, gradient: &FillGradient) -> String {
+    let angle = match gradient {
+        FillGradient::Smooth { angle, .. }
+        | FillGradient::Partition { angle, .. } => *angle,
+    };
+    let radians = angle.to_radians();
+    let x = radians.cos() * 0.5;
+    let y = radians.sin() * 0.5;
+    let x1 = 0.5 - x;
+    let y1 = 0.5 + y;
+    let x2 = 0.5 + x;
+    let y2 = 0.5 - y;
+    let mut stops = String::new();
+    for (color, offset) in svg_gradient_stops(gradient) {
+        stops.push_str(&format!(
+            "<stop offset=\"{}%\" stop-color=\"{}\" />",
+            offset * 100.,
+            color.to_web_color()
+        ));
+    }
+    format!(
+        "<linearGradient id=\"{}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">\
+         {}\
+         </linearGradient>\n",
+        id, x1, y1, x2, y2, stops
+    )
+}
+
+fn svg_gradient_stops(gradient: &FillGradient) -> Vec<(Color, f64)> {
+    match gradient {
+        FillGradient::Smooth { start, end, .. } => {
+            vec![(*start, 0.), (*end, 1.)]
+        }
+        FillGradient::Partition {
+            first,
+            second,
+            split,
+            ..
+        } => {
+            vec![
+                (*first, 0.),
+                (*first, *split),
+                (*second, *split),
+                (*second, 1.),
+            ]
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -185,20 +234,32 @@ impl RenderBackend for SVGWriter {
         }
         let props = properties.unwrap_or_default();
         let fill_color = look.fill_color.unwrap_or_else(Color::transparent);
+        let (fill, fill_def) = if let Some(gradient) = &look.fill_gradient {
+            let id = format!("G{}", self.counter);
+            self.counter += 1;
+            (
+                format!("url(#{})", id),
+                svg_linear_gradient_def(&id, gradient),
+            )
+        } else {
+            (fill_color.to_web_color(), String::new())
+        };
         let stroke_width = look.line_width;
         let stroke_color = look.line_color;
         let rounded_px = look.rounded;
         if sides.is_all() || sides.is_none() {
             let line1 = format!(
                 "<g {props}>\n
+                {}
                 <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" 
                 stroke-width=\"{}\" stroke=\"{}\" rx=\"{}\" {} />\n
                 </g>\n",
+                fill_def,
                 xy.x,
                 xy.y,
                 size.x,
                 size.y,
-                fill_color.to_web_color(),
+                fill,
                 stroke_width,
                 stroke_color.to_web_color(),
                 rounded_px,
@@ -211,14 +272,16 @@ impl RenderBackend for SVGWriter {
         if stroke_width == 0 {
             let line1 = format!(
                 "<g {props}>\n
+                {}
                 <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" 
                 stroke-width=\"0\" stroke=\"transparent\" rx=\"{}\" {} />\n
                 </g>\n",
+                fill_def,
                 xy.x,
                 xy.y,
                 size.x,
                 size.y,
-                fill_color.to_web_color(),
+                fill,
                 rounded_px,
                 clip_option
             );
@@ -252,15 +315,17 @@ impl RenderBackend for SVGWriter {
         );
         let line1 = format!(
             "<g {props}>\n
+            {}
             <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" 
             stroke-width=\"0\" stroke=\"transparent\" rx=\"{}\" {} />\n
             {}
             </g>\n",
+            fill_def,
             xy.x,
             xy.y,
             size.x,
             size.y,
-            fill_color.to_web_color(),
+            fill,
             rounded_px,
             clip_option,
             stroke

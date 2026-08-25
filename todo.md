@@ -35,11 +35,11 @@ Required changes:
 
 Current state:
 
-- `layout/src/gv/html.rs` parses/stores `href`, `id`, `target`, `tooltip`, and `gradientangle` on table/cell attributes.
+- `layout/src/gv/html.rs` parses/stores `href`, `id`, `target`, and `tooltip` on table/cell attributes.
 - Rendering mostly ignores them in `layout/src/std_shapes/render.rs`.
 - SVG primitives already accept raw `properties: Option<String>` in `layout/src/core/format.rs` and `layout/src/backends/svg.rs`.
 - `SIDES` is rendered as selective border lines, and `FIXEDSIZE`/`WIDTH`/`HEIGHT` participate in table sizing.
-- `GRADIENTANGLE` is intentionally unsupported for now; no SVG gradient definitions are emitted.
+- `BGCOLOR` color lists render as SVG gradients with `GRADIENTANGLE` setting the gradient direction; unweighted lists use the first two colors, and weighted lists render as partitioned fills.
 
 Required changes:
 

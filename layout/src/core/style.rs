@@ -90,10 +90,26 @@ pub(crate) enum BaselineShift {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) enum FillGradient {
+    Smooth {
+        start: Color,
+        end: Color,
+        angle: f64,
+    },
+    Partition {
+        first: Color,
+        second: Color,
+        split: f64,
+        angle: f64,
+    },
+}
+
+#[derive(Clone, Debug)]
 pub struct StyleAttr {
     pub line_color: Color,
     pub line_width: usize,
     pub fill_color: Option<Color>,
+    pub(crate) fill_gradient: Option<FillGradient>,
     pub rounded: usize,
     pub font_size: usize,
     pub(crate) fontname: String,
@@ -121,6 +137,7 @@ impl StyleAttr {
             line_color,
             line_width,
             fill_color,
+            fill_gradient: None,
             font_color,
             rounded,
             font_size,

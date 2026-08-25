@@ -372,19 +372,65 @@ mod tests {
     }
 
     #[test]
-    fn render_html_gradientangle_is_parsed_but_unsupported() {
+    fn render_html_gradientangle_outputs_svg_gradient() {
         let svg = render_dot(
             r#"digraph {
                 a [shape=plain label=<
-                    <TABLE BORDER="1" CELLBORDER="1" GRADIENTANGLE="45">
-                        <TR><TD GRADIENTANGLE="90">gradientangle</TD></TR>
+                    <TABLE BORDER="1" CELLBORDER="1" BGCOLOR="lightblue:lightyellow" GRADIENTANGLE="45">
+                        <TR><TD BGCOLOR="lightpink:lightcyan" GRADIENTANGLE="90">gradientangle</TD></TR>
                     </TABLE>
                 >];
             }"#,
         );
 
         assert!(svg.contains(">gradientangle</tspan>"));
-        assert!(!svg.contains("<linearGradient"));
+        assert!(svg.contains("<linearGradient"));
+        assert!(svg.contains("stop-color=\"#add8e6ff\""));
+        assert!(svg.contains("stop-color=\"#ffffe0ff\""));
+        assert!(svg.contains("stop-color=\"#ffb6c1ff\""));
+        assert!(svg.contains("stop-color=\"#e0ffffff\""));
+    }
+
+    #[test]
+    fn render_html_unweighted_colorlist_uses_first_two_colors() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="1" CELLBORDER="1">
+                        <TR><TD BGCOLOR="red:yellow:green">three colors</TD></TR>
+                        <TR><TD BGCOLOR="white:black:gray">three grayscale</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains(">three colors</tspan>"));
+        assert!(svg.contains(">three grayscale</tspan>"));
+        assert!(svg.contains("stop-color=\"#ff0000ff\""));
+        assert!(svg.contains("stop-color=\"#ffff00ff\""));
+        assert!(svg.contains("stop-color=\"#ffffffff\""));
+        assert!(svg.contains("stop-color=\"#000000ff\""));
+        assert!(!svg.contains("stop-color=\"#008000ff\""));
+        assert!(!svg.contains("stop-color=\"#808080ff\""));
+    }
+
+    #[test]
+    fn render_html_weighted_bgcolor_outputs_partitioned_gradient() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="1" CELLBORDER="1">
+                        <TR><TD BGCOLOR="red;0.25:blue">weighted stop</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains(">weighted stop</tspan>"));
+        assert!(svg.contains("offset=\"0%\" stop-color=\"#ff0000ff\""));
+        assert!(svg.contains("offset=\"25%\" stop-color=\"#ff0000ff\""));
+        assert!(svg.contains("offset=\"25%\" stop-color=\"#0000ffff\""));
+        assert!(svg.contains("offset=\"100%\" stop-color=\"#0000ffff\""));
     }
 
     #[test]

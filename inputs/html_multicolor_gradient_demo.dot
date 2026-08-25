@@ -1,0 +1,21 @@
+digraph HtmlMulticolorGradientDemo {
+    label="HTML Multi-color Gradient Demo";
+    labelloc=t;
+
+    node [shape=plain];
+
+    gradients [label=<
+        <TABLE BORDER="1" CELLBORDER="1" CELLSPACING="8" CELLPADDING="8" BGCOLOR="lightblue:lightyellow" GRADIENTANGLE="45">
+            <TR>
+                <TD BGCOLOR="lightpink:lightcyan" GRADIENTANGLE="90">two colors</TD>
+                <TD BGCOLOR="red:yellow:green" GRADIENTANGLE="0">third ignored</TD>
+                <TD BGCOLOR="red;0.25:blue" GRADIENTANGLE="0">weighted stop</TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="orange:purple" GRADIENTANGLE="180">reverse angle</TD>
+                <TD BGCOLOR="white:black:gray" GRADIENTANGLE="270">gray ignored</TD>
+                <TD>table gradient fallback</TD>
+            </TR>
+        </TABLE>
+    >];
+}

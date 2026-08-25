@@ -3,8 +3,8 @@ use std::collections::HashMap;
 
 use crate::core::color::Color;
 use crate::core::style::{
-    Align, BAlign, BaselineShift, FontStyle, FontWeight, StyleAttr,
-    TextDecoration, VAlign,
+    Align, BAlign, BaselineShift, FillGradient, FontStyle, FontWeight,
+    StyleAttr, TextDecoration, VAlign,
 };
 use crate::core::utils::get_image_size;
 
@@ -288,8 +288,8 @@ pub(crate) struct TableAttr {
     fixedsize: bool,                 // FALSE|TRUE
 
     // Full inheritance on bgcolor, use only if set
-    color: Option<Color>,   // color
-    bgcolor: Option<Color>, // color
+    color: Option<Color>,    // color
+    bgcolor: Option<String>, // color or color-list
 
     // inheritance only for the first children cell
     pub(crate) border: u8,             // value
@@ -1095,7 +1095,11 @@ impl TdAttr {
     pub(crate) fn build_style_attr(&self, style_attr: &StyleAttr) -> StyleAttr {
         let mut style_attr = style_attr.clone();
         if let Some(ref color) = self.bgcolor {
-            style_attr.fill_color = Color::from_name(color);
+            apply_html_fill(
+                &mut style_attr,
+                color,
+                self.gradientangle.as_deref(),
+            );
         }
         style_attr.valign = self.valign.clone();
         style_attr.align = self.align.clone();
@@ -1146,6 +1150,97 @@ impl Sides {
     }
 }
 
+fn apply_html_fill(
+    style_attr: &mut StyleAttr,
+    bgcolor: &str,
+    gradientangle: Option<&str>,
+) {
+    match parse_html_fill(bgcolor, parse_gradient_angle(gradientangle)) {
+        Some(HtmlFill::Solid(color)) => {
+            style_attr.fill_gradient = None;
+            style_attr.fill_color = Some(color);
+        }
+        Some(HtmlFill::SmoothGradient { start, end, angle }) => {
+            style_attr.fill_color = None;
+            style_attr.fill_gradient =
+                Some(FillGradient::Smooth { start, end, angle });
+        }
+        Some(HtmlFill::Partition {
+            first,
+            second,
+            split,
+            angle,
+        }) => {
+            style_attr.fill_color = None;
+            style_attr.fill_gradient = Some(FillGradient::Partition {
+                first,
+                second,
+                split,
+                angle,
+            });
+        }
+        None => {
+            style_attr.fill_gradient = None;
+            style_attr.fill_color = None;
+        }
+    }
+}
+
+enum HtmlFill {
+    Solid(Color),
+    SmoothGradient {
+        start: Color,
+        end: Color,
+        angle: f64,
+    },
+    Partition {
+        first: Color,
+        second: Color,
+        split: f64,
+        angle: f64,
+    },
+}
+
+fn parse_html_fill(bgcolor: &str, angle: f64) -> Option<HtmlFill> {
+    let color_parts: Vec<_> = bgcolor.split(':').collect();
+    if color_parts.len() == 1 {
+        return Color::from_name(bgcolor).map(HtmlFill::Solid);
+    }
+
+    let first = parse_weighted_color(color_parts[0])?;
+    let second = parse_weighted_color(color_parts[1])?;
+    if let Some(split) = first.1.or(second.1) {
+        return Some(HtmlFill::Partition {
+            first: first.0,
+            second: second.0,
+            split,
+            angle,
+        });
+    }
+
+    Some(HtmlFill::SmoothGradient {
+        start: first.0,
+        end: second.0,
+        angle,
+    })
+}
+
+fn parse_weighted_color(input: &str) -> Option<(Color, Option<f64>)> {
+    let mut pieces = input.splitn(2, ';');
+    let color_name = pieces.next().unwrap_or("").trim();
+    let weight = pieces
+        .next()
+        .and_then(|weight| weight.trim().parse::<f64>().ok())
+        .filter(|weight| *weight >= 0. && *weight <= 1.);
+    Color::from_name(color_name).map(|color| (color, weight))
+}
+
+fn parse_gradient_angle(gradientangle: Option<&str>) -> f64 {
+    gradientangle
+        .and_then(|angle| angle.parse().ok())
+        .unwrap_or(0.)
+}
+
 impl TableAttr {
     fn new() -> Self {
         Self {
@@ -1191,15 +1286,7 @@ impl TableAttr {
                     _ => Align::Center,
                 }
             }
-            "bgcolor" => {
-                self.bgcolor = {
-                    if let Some(color) = Color::from_name(value) {
-                        Some(color)
-                    } else {
-                        None
-                    }
-                }
-            }
+            "bgcolor" => self.bgcolor = Some(value.to_string()),
             "border" => self.border = value.parse().unwrap_or(0),
             "cellborder" => self.cellborder = value.parse().ok(),
             "cellpadding" => self.cellpadding = value.parse().unwrap_or(0),
@@ -1893,7 +1980,11 @@ impl TableGrid {
     pub(crate) fn build_style_attr(&self, style_attr: &StyleAttr) -> StyleAttr {
         let mut style_attr = style_attr.clone();
         if let Some(ref color) = self.table_attr.bgcolor {
-            style_attr.fill_color = Some(color.clone());
+            apply_html_fill(
+                &mut style_attr,
+                color,
+                self.table_attr.gradientangle.as_deref(),
+            );
         }
         style_attr.valign = self.table_attr.valign.clone();
         style_attr.align = self.table_attr.align.clone();
