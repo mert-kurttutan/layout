@@ -1,7 +1,9 @@
 //! SVG rendering backend that accepts draw calls and saves the output to a file.
 
 use crate::core::color::Color;
-use crate::core::format::{ClipHandle, RectSides, RenderBackend};
+use crate::core::format::{
+    ClipHandle, RectSides, RenderBackend, RenderProperties, ScopeKind,
+};
 use crate::core::geometry::{get_size_for_str, Point};
 use crate::core::style::{FillGradient, StyleAttr, TextDecoration};
 use std::collections::HashMap;
@@ -48,6 +50,21 @@ fn escape_string(x: &str) -> String {
         }
     }
     res
+}
+
+fn svg_properties(properties: Option<RenderProperties>) -> String {
+    let Some(properties) = properties else {
+        return String::new();
+    };
+
+    let mut result = properties.raw.unwrap_or_default();
+    if let Some(id) = properties.id {
+        if !result.is_empty() {
+            result.push(' ');
+        }
+        result.push_str(&format!("id=\"{}\"", escape_string(&id)));
+    }
+    result
 }
 
 fn svg_linear_gradient_def(id: &str, gradient: &FillGradient) -> String {
@@ -200,7 +217,7 @@ impl SVGWriter {
 
         let svg_line = format!(
             "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\
-            \" xmlns=\"http://www.w3.org/2000/svg\">\n",
+            \" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n",
             self.view_size.x,
             self.view_size.y,
             self.view_size.x,
@@ -217,12 +234,70 @@ impl SVGWriter {
     }
 }
 impl RenderBackend for SVGWriter {
+    fn begin_scope(&mut self, properties: Option<RenderProperties>) {
+        let Some(properties) = properties else {
+            self.content.push_str("<g>\n");
+            return;
+        };
+
+        let mut group_props = properties.raw.clone().unwrap_or_default();
+        if let Some(id) = &properties.id {
+            if !group_props.is_empty() {
+                group_props.push(' ');
+            }
+            let group_id = if properties.href.is_some() {
+                format!("a_{}", id)
+            } else {
+                id.clone()
+            };
+            group_props
+                .push_str(&format!("id=\"{}\"", escape_string(&group_id)));
+        }
+        if group_props.is_empty() {
+            self.content.push_str("<g>\n");
+        } else {
+            self.content.push_str(&format!("<g {}>\n", group_props));
+        }
+
+        if let Some(href) = properties.href {
+            let mut link_props =
+                format!("xlink:href=\"{}\"", escape_string(&href));
+            if let Some(tooltip) = properties.tooltip {
+                link_props.push_str(&format!(
+                    " xlink:title=\"{}\"",
+                    escape_string(&tooltip)
+                ));
+            }
+            if let Some(target) = properties.target {
+                link_props.push_str(&format!(
+                    " target=\"{}\"",
+                    escape_string(&target)
+                ));
+            }
+            self.content.push_str(&format!("<a {}>\n", link_props));
+        } else {
+            if let Some(tooltip) = properties.tooltip {
+                self.content.push_str(&format!(
+                    "<title>{}</title>\n",
+                    escape_string(&tooltip)
+                ));
+            }
+        }
+    }
+
+    fn end_scope(&mut self, kind: ScopeKind) {
+        if kind == ScopeKind::Link {
+            self.content.push_str("</a>\n");
+        }
+        self.content.push_str("</g>\n");
+    }
+
     fn draw_rect(
         &mut self,
         xy: Point,
         size: Point,
         look: &StyleAttr,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
         clip: Option<ClipHandle>,
         sides: RectSides,
     ) {
@@ -232,7 +307,7 @@ impl RenderBackend for SVGWriter {
         if let Option::Some(clip_id) = clip {
             clip_option = format!("clip-path=\"url(#C{})\"", clip_id);
         }
-        let props = properties.unwrap_or_default();
+        let props = svg_properties(properties);
         let fill_color = look.fill_color.unwrap_or_else(Color::transparent);
         let (fill, fill_def) = if let Some(gradient) = &look.fill_gradient {
             let id = format!("G{}", self.counter);
@@ -338,13 +413,13 @@ impl RenderBackend for SVGWriter {
         xy: Point,
         size: Point,
         look: &StyleAttr,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
     ) {
         self.grow_window(xy, size);
         let fill_color = look.fill_color.unwrap_or_else(Color::transparent);
         let stroke_width = look.line_width;
         let stroke_color = look.line_color;
-        let props = properties.unwrap_or_default();
+        let props = svg_properties(properties);
         let line1 = format!(
             "<g {props}>\n
             <ellipse cx=\"{}\" cy=\"{}\" rx=\"{}\" ry=\"{}\" fill=\"{}\" 
@@ -426,7 +501,7 @@ impl RenderBackend for SVGWriter {
         dashed: bool,
         head: (bool, bool),
         look: &StyleAttr,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
         text: &str,
     ) {
         // Control points as defined in here:
@@ -478,7 +553,7 @@ impl RenderBackend for SVGWriter {
 
         let stroke_width = look.line_width;
         let stroke_color = look.line_color;
-        let props = properties.unwrap_or_default();
+        let props = svg_properties(properties);
         let line = format!(
             "<g {props}>\n
             <path id=\"arrow{}\" d=\"{}\" \
@@ -512,10 +587,10 @@ impl RenderBackend for SVGWriter {
         xy: Point,
         size: Point,
         file_path: &str,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
     ) {
         self.grow_window(xy, size);
-        let props = properties.unwrap_or_default();
+        let props = svg_properties(properties);
         let line1 = format!(
             "<g {props}>\n
              <image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" \
@@ -531,11 +606,11 @@ impl RenderBackend for SVGWriter {
         start: Point,
         stop: Point,
         look: &StyleAttr,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
     ) {
         let stroke_width = look.line_width;
         let stroke_color = look.line_color;
-        let props = properties.unwrap_or_default();
+        let props = svg_properties(properties);
         let line1 = format!(
             "<g {props}>\n
              <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke-width=\"{}\"

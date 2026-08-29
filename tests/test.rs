@@ -451,6 +451,61 @@ mod tests {
     }
 
     #[test]
+    fn render_html_table_and_cell_ids() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="1" CELLBORDER="1" ID="table-main">
+                        <TR><TD ID="cell-&amp;doc">id cell</TD></TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains("id=\"table-main\""));
+        assert!(svg.contains("id=\"cell-&amp;amp;doc\""));
+        assert!(svg.contains(">id cell</tspan>"));
+    }
+
+    #[test]
+    fn render_html_link_metadata_properties() {
+        let svg = render_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE BORDER="1" CELLBORDER="1"
+                           ID="table-main"
+                           HREF="https://example.com/table?x=1&y=2"
+                           TARGET="_blank"
+                           TOOLTIP="table tooltip & metadata">
+                        <TR>
+                            <TD ID="cell-doc"
+                                HREF="https://example.com/cell?name=alpha&mode=view"
+                                TARGET="_top"
+                                TOOLTIP="cell tooltip <escaped>">linked cell</TD>
+                            <TD TOOLTIP="inherited href tooltip">tooltip cell</TD>
+                        </TR>
+                    </TABLE>
+                >];
+            }"#,
+        );
+
+        assert!(svg.contains("id=\"a_table-main\""));
+        assert!(svg
+            .contains("xlink:href=\"https://example.com/table?x=1&amp;y=2\""));
+        assert!(svg.contains("xlink:title=\"table tooltip &amp; metadata\""));
+        assert!(svg.contains("target=\"_blank\""));
+        assert!(svg.contains("id=\"a_cell-doc\""));
+        assert!(svg.contains(
+            "xlink:href=\"https://example.com/cell?name=alpha&amp;mode=view\""
+        ));
+        assert!(svg.contains("xlink:title=\"cell tooltip &lt;escaped&gt;\""));
+        assert!(svg.contains("target=\"_top\""));
+        assert!(svg.contains("xlink:title=\"inherited href tooltip\""));
+        assert!(svg.contains(">linked cell</tspan>"));
+        assert!(svg.contains(">tooltip cell</tspan>"));
+    }
+
+    #[test]
     fn render_html_edge_label() {
         let svg = render_dot(
             r#"digraph {

@@ -2,7 +2,8 @@
 
 use crate::core::base::Orientation;
 use crate::core::format::{
-    ClipHandle, RectSides, RenderBackend, Renderable, Visible,
+    ClipHandle, RectSides, RenderBackend, RenderProperties, Renderable,
+    ScopeKind, Visible,
 };
 use crate::core::geometry::*;
 use crate::core::style::{Align, LineStyleKind, StyleAttr, VAlign};
@@ -374,6 +375,21 @@ fn render_font_table(
         loc.x - table_grid_width / 2.,
         loc.y - table_grid_height / 2.,
     );
+    let table_properties = html_render_properties(
+        rec.table_attr.id.as_deref(),
+        rec.table_attr.href.as_deref(),
+        rec.table_attr.target.as_deref(),
+        html_tooltip(
+            rec.table_attr.tooltip.as_deref(),
+            rec.table_attr.title.as_deref(),
+        ),
+    );
+
+    let has_table_properties = table_properties.is_some();
+    let table_scope = scope_kind(table_properties.as_ref());
+    if has_table_properties {
+        canvas.begin_scope(table_properties);
+    }
     canvas.draw_rect(
         loc_0,
         Point::new(
@@ -403,6 +419,26 @@ fn render_font_table(
         let mut look_cell_border = look_cell.clone();
         look_cell_border.line_width = cellborder as usize;
 
+        let cell_properties = html_render_properties(
+            td_attr.id.as_deref(),
+            td_attr.href.as_deref().or(rec.table_attr.href.as_deref()),
+            td_attr
+                .target
+                .as_deref()
+                .or(rec.table_attr.target.as_deref()),
+            html_tooltip(td_attr.tooltip.as_deref(), td_attr.title.as_deref())
+                .or_else(|| {
+                    html_tooltip(
+                        rec.table_attr.tooltip.as_deref(),
+                        rec.table_attr.title.as_deref(),
+                    )
+                }),
+        );
+        let has_cell_properties = cell_properties.is_some();
+        let cell_scope = scope_kind(cell_properties.as_ref());
+        if has_cell_properties {
+            canvas.begin_scope(cell_properties);
+        }
         canvas.draw_rect(
             Point::new(
                 cell_loc.x - cell_render_size.x * 0.5 + cellborder * 0.5,
@@ -421,6 +457,13 @@ fn render_font_table(
             cell_render_size.y - cellborder * 2. - cellpadding * 2.,
         );
         render_cell(&c, cell_loc, size, &look_cell, canvas);
+        if has_cell_properties {
+            canvas.end_scope(cell_scope);
+        }
+    }
+
+    if has_table_properties {
+        canvas.end_scope(table_scope);
     }
 }
 
@@ -431,6 +474,54 @@ fn rect_sides_from_html(sides: Option<&Sides>) -> RectSides {
         top: sides.top,
         bottom: sides.bottom,
     })
+}
+
+fn html_tooltip<'a>(
+    tooltip: Option<&'a str>,
+    title: Option<&'a str>,
+) -> Option<&'a str> {
+    tooltip.or(title)
+}
+
+fn html_render_properties(
+    id: Option<&str>,
+    href: Option<&str>,
+    target: Option<&str>,
+    tooltip: Option<&str>,
+) -> Option<RenderProperties> {
+    let mut properties = RenderProperties::new();
+    if let Some(id) = id {
+        properties = properties.with_id(id);
+    }
+    if let Some(href) = href {
+        properties = properties.with_href(href);
+    }
+    if let Some(target) = target {
+        properties = properties.with_target(target);
+    }
+    if let Some(tooltip) = tooltip {
+        properties = properties.with_tooltip(tooltip);
+    }
+
+    (properties.id.is_some()
+        || properties.href.is_some()
+        || properties.target.is_some()
+        || properties.tooltip.is_some())
+    .then_some(properties)
+}
+
+fn scope_kind(properties: Option<&RenderProperties>) -> ScopeKind {
+    if properties.and_then(|properties| properties.href.as_ref()).is_some() {
+        ScopeKind::Link
+    } else {
+        ScopeKind::Plain
+    }
+}
+
+fn raw_render_properties(
+    properties: Option<String>,
+) -> Option<RenderProperties> {
+    properties.map(RenderProperties::raw)
 }
 
 fn render_cell(
@@ -630,7 +721,7 @@ impl Renderable for Element {
                 bb.0,
                 self.pos.size(true),
                 &debug_look,
-                self.properties.clone(),
+                raw_render_properties(self.properties.clone()),
                 Option::None,
                 RectSides::all(),
             );
@@ -661,7 +752,7 @@ impl Renderable for Element {
                     self.pos.bbox(false).0,
                     self.pos.size(false),
                     &self.look,
-                    self.properties.clone(),
+                    raw_render_properties(self.properties.clone()),
                     Option::None,
                     RectSides::all(),
                 );
@@ -678,7 +769,7 @@ impl Renderable for Element {
                     self.pos.center(),
                     self.pos.size(false),
                     &self.look,
-                    self.properties.clone(),
+                    raw_render_properties(self.properties.clone()),
                 );
                 // canvas.draw_text(self.pos.center(), text.as_str(), &self.look);
                 draw_shape_content(
@@ -694,7 +785,7 @@ impl Renderable for Element {
                     self.pos.center(),
                     self.pos.size(false),
                     &self.look,
-                    self.properties.clone(),
+                    raw_render_properties(self.properties.clone()),
                 );
                 let outer_circle_style = {
                     let mut x = self.look.clone();
@@ -751,7 +842,7 @@ impl Renderable for Element {
                     self.pos.bbox(false).0,
                     self.pos.size(false),
                     &self.look,
-                    self.properties.clone(),
+                    raw_render_properties(self.properties.clone()),
                     Option::None,
                     RectSides::all(),
                 );
@@ -1039,7 +1130,7 @@ pub fn render_arrow(
         dash,
         (start, end),
         &arrow.look,
-        arrow.properties.clone(),
+        raw_render_properties(arrow.properties.clone()),
         text,
     );
 

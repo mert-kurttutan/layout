@@ -1,0 +1,27 @@
+digraph HtmlLinkAttrsDemo {
+    label="HTML Link and Metadata Attribute Demo";
+    labelloc=t;
+
+    node [shape=plain];
+
+    attrs [label=<
+        <TABLE BORDER="1" CELLBORDER="1" CELLSPACING="8" CELLPADDING="8"
+               ID="table-main"
+               HREF="https://example.com/table?x=1&amp;y=2"
+               TARGET="_blank"
+               TOOLTIP="table tooltip &amp; metadata">
+            <TR>
+                <TD ID="cell-doc"
+                    HREF="https://example.com/cell?name=alpha&amp;mode=view"
+                    TARGET="_top"
+                    TOOLTIP="cell tooltip &lt;escaped&gt;">
+                    linked cell
+                </TD>
+                <TD TITLE="title text &amp; chars"
+                    TOOLTIP="tooltip text &quot;quoted&quot;">
+                    tooltip cell
+                </TD>
+            </TR>
+        </TABLE>
+    >];
+}

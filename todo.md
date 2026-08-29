@@ -31,22 +31,6 @@ Required changes:
 - If embedding, extend `get_image_size`/image utilities to read bytes and MIME type, then make `SVGWriter::draw_image` emit `data:image/png;base64,...`.
 - Add tests for output written outside the repo.
 
-### Render or document parsed-but-unused HTML attributes
-
-Current state:
-
-- `layout/src/gv/html.rs` parses/stores `href`, `id`, `target`, and `tooltip` on table/cell attributes.
-- Rendering mostly ignores them in `layout/src/std_shapes/render.rs`.
-- SVG primitives already accept raw `properties: Option<String>` in `layout/src/core/format.rs` and `layout/src/backends/svg.rs`.
-- `SIDES` is rendered as selective border lines, and `FIXEDSIZE`/`WIDTH`/`HEIGHT` participate in table sizing.
-- `BGCOLOR` color lists render as SVG gradients with `GRADIENTANGLE` setting the gradient direction; unweighted lists use the first two colors, and weighted lists render as partitioned fills.
-
-Required changes:
-
-- For `id`, `href`, `target`, and `tooltip`, build SVG-safe property strings and pass them into `draw_rect`, `draw_text`, or wrapper groups.
-- Escape attribute values before inserting them into SVG. Current `properties` strings are raw.
-- Add per-attribute tests that inspect SVG output for `id`, `href`, `target`, and `tooltip`.
-
 ### Improve malformed HTML error handling
 
 Current state:

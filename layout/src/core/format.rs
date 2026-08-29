@@ -57,6 +57,57 @@ pub trait Renderable {
 pub type ClipHandle = usize;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScopeKind {
+    Plain,
+    Link,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RenderProperties {
+    pub id: Option<String>,
+    pub href: Option<String>,
+    pub target: Option<String>,
+    pub tooltip: Option<String>,
+    pub raw: Option<String>,
+}
+
+impl RenderProperties {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn raw(raw: impl Into<String>) -> Self {
+        Self {
+            id: None,
+            href: None,
+            target: None,
+            tooltip: None,
+            raw: Some(raw.into()),
+        }
+    }
+
+    pub fn with_id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+
+    pub fn with_href(mut self, href: impl Into<String>) -> Self {
+        self.href = Some(href.into());
+        self
+    }
+
+    pub fn with_target(mut self, target: impl Into<String>) -> Self {
+        self.target = Some(target.into());
+        self
+    }
+
+    pub fn with_tooltip(mut self, tooltip: impl Into<String>) -> Self {
+        self.tooltip = Some(tooltip.into());
+        self
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RectSides {
     pub left: bool,
     pub right: bool,
@@ -94,6 +145,14 @@ impl RectSides {
 
 /// This is the trait that all rendering backends need to implement.
 pub trait RenderBackend {
+    /// Start a semantic render scope. Backends that support metadata can
+    /// serialize the scope as links, titles, IDs, or other target-specific
+    /// metadata around the draw calls emitted before `end_scope`.
+    fn begin_scope(&mut self, properties: Option<RenderProperties>);
+
+    /// End the most recent semantic render scope.
+    fn end_scope(&mut self, kind: ScopeKind);
+
     /// Draw a rectangle. The top-left point of the rectangle is \p xy. The shape
     /// style (color, edge-width) are passed in \p look. The parameter \p clip
     /// is an optional clip region (see: create_clip). The \p sides parameter
@@ -103,7 +162,7 @@ pub trait RenderBackend {
         xy: Point,
         size: Point,
         look: &StyleAttr,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
         clip: Option<ClipHandle>,
         sides: RectSides,
     );
@@ -114,7 +173,7 @@ pub trait RenderBackend {
         start: Point,
         stop: Point,
         look: &StyleAttr,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
     );
 
     /// Draw an ellipse with the center \p xy, and size \p size.
@@ -123,7 +182,7 @@ pub trait RenderBackend {
         xy: Point,
         size: Point,
         look: &StyleAttr,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
     );
 
     /// Draw a labe.
@@ -136,7 +195,7 @@ pub trait RenderBackend {
         dashed: bool,
         head: (bool, bool),
         look: &StyleAttr,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
         text: &str,
     );
 
@@ -146,7 +205,7 @@ pub trait RenderBackend {
         xy: Point,
         size: Point,
         file_path: &str,
-        properties: Option<String>,
+        properties: Option<RenderProperties>,
     );
 
     /// Generate a clip region that shapes can use to create complex shapes.

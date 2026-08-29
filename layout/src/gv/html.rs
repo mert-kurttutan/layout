@@ -253,14 +253,14 @@ pub(crate) struct TdAttr {
     cellspacing: Option<u8>, // value
 
     // TODO: to be implemented
-    gradientangle: Option<String>,   // value
-    href: Option<String>,            // value
-    id: Option<String>,              // value
-    pub(crate) port: Option<String>, // portName
-    style: Option<String>,           // value
-    target: Option<String>,          // value
-    title: Option<String>,           // value
-    tooltip: Option<String>,         // value
+    gradientangle: Option<String>,      // value
+    pub(crate) href: Option<String>,    // value
+    pub(crate) id: Option<String>,      // value
+    pub(crate) port: Option<String>,    // portName
+    style: Option<String>,              // value
+    pub(crate) target: Option<String>,  // value
+    pub(crate) title: Option<String>,   // value
+    pub(crate) tooltip: Option<String>, // value
 }
 
 #[derive(Debug, Clone)]
@@ -297,14 +297,14 @@ pub(crate) struct TableAttr {
     pub(crate) cellpadding: u8,        // value
     pub(crate) cellspacing: u8,        // value
 
-    gradientangle: Option<String>,   // value
-    href: Option<String>,            // value
-    id: Option<String>,              // value
-    pub(crate) port: Option<String>, // portName
-    style: Option<String>,           // value
-    target: Option<String>,          // value
-    title: Option<String>,           // value
-    tooltip: Option<String>,         // value
+    gradientangle: Option<String>,      // value
+    pub(crate) href: Option<String>,    // value
+    pub(crate) id: Option<String>,      // value
+    pub(crate) port: Option<String>,    // portName
+    style: Option<String>,              // value
+    pub(crate) target: Option<String>,  // value
+    pub(crate) title: Option<String>,   // value
+    pub(crate) tooltip: Option<String>, // value
 }
 
 #[derive(Debug, Clone)]
