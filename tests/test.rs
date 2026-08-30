@@ -26,13 +26,20 @@ mod tests {
     }
 
     fn render_dot(program: &str) -> String {
-        let graph = parse_dot(program);
-        let mut builder = GraphBuilder::new();
-        builder.visit_graph(&graph);
-        let mut visual_graph = builder.get();
+        let mut visual_graph =
+            build_dot(program).expect("expected graph to build successfully");
         let mut svg = SVGWriter::new();
         visual_graph.do_it(false, false, false, &mut svg);
         svg.finalize()
+    }
+
+    fn build_dot(
+        program: &str,
+    ) -> Result<layout::topo::layout::VisualGraph, String> {
+        let graph = parse_dot(program);
+        let mut builder = GraphBuilder::new();
+        builder.visit_graph(&graph);
+        builder.try_get()
     }
 
     fn text_y(svg: &str, label: &str) -> f64 {
@@ -617,21 +624,59 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn render_html_unknown_entity_panics() {
-        render_dot(r#"digraph { a [label=<unknown &madeup; entity>]; }"#);
+    fn build_html_unknown_entity_returns_error() {
+        let err =
+            build_dot(r#"digraph { a [label=<unknown &madeup; entity>]; }"#)
+                .expect_err("expected unknown HTML entity to fail");
+        assert!(err.contains("Expected identifier or tag opener"));
     }
 
     #[test]
-    #[should_panic]
-    fn render_html_missing_entity_semicolon_panics() {
-        render_dot(r#"digraph { a [label=<missing &amp semicolon>]; }"#);
+    fn build_html_missing_entity_semicolon_returns_error() {
+        let err =
+            build_dot(r#"digraph { a [label=<missing &amp semicolon>]; }"#)
+                .expect_err("expected missing HTML entity semicolon to fail");
+        assert!(err.contains("Expected identifier or tag opener"));
     }
 
     #[test]
-    #[should_panic]
-    fn render_html_numeric_entity_panics() {
-        render_dot(r#"digraph { a [label=<numeric &#65; entity>]; }"#);
+    fn build_html_numeric_entity_returns_error() {
+        let err = build_dot(r#"digraph { a [label=<numeric &#65; entity>]; }"#)
+            .expect_err("expected numeric HTML entity to fail");
+        assert!(err.contains("Expected identifier or tag opener"));
+    }
+
+    #[test]
+    fn build_html_unclosed_tag_returns_error() {
+        let err = build_dot(r#"digraph { a [label=<open <B>bold>]; }"#)
+            .expect_err("expected unclosed HTML tag to fail");
+        assert!(err.contains("Expected 'closing tag"));
+    }
+
+    #[test]
+    fn build_html_invalid_table_structure_returns_error() {
+        let err = build_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE><TD>missing row</TD></TABLE>
+                >];
+            }"#,
+        )
+        .expect_err("expected invalid HTML table structure to fail");
+        assert!(err.contains("Expected <tr>"));
+    }
+
+    #[test]
+    fn build_html_image_without_src_returns_error() {
+        let err = build_dot(
+            r#"digraph {
+                a [shape=plain label=<
+                    <TABLE><TR><TD><IMG SCALE="TRUE"/></TD></TR></TABLE>
+                >];
+            }"#,
+        )
+        .expect_err("expected HTML image without SRC to fail");
+        assert!(err.contains("requires a SRC attribute"));
     }
 
     #[test]

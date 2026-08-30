@@ -286,6 +286,11 @@ impl GraphBuilder {
     }
 
     pub fn get(&self) -> VisualGraph {
+        self.try_get()
+            .expect("failed to build visual graph from DOT AST")
+    }
+
+    pub fn try_get(&self) -> Result<VisualGraph, String> {
         let mut dir = Orientation::TopToBottom;
 
         // Set the graph orientation based on the 'rankdir' property.
@@ -299,7 +304,7 @@ impl GraphBuilder {
 
         let mut vg = VisualGraph::new(dir);
         if let Some(label) =
-            Self::get_graph_label_from_attributes(dir, &self.global_state)
+            Self::get_graph_label_from_attributes(dir, &self.global_state)?
         {
             vg.set_graph_label(label);
         }
@@ -311,7 +316,7 @@ impl GraphBuilder {
                 dir,
                 &subgraph.props,
                 &subgraph.name,
-            );
+            )?;
             let handle = vg.add_subgraph(elem, parent);
             subgraph_handles.push(handle);
         }
@@ -323,10 +328,12 @@ impl GraphBuilder {
 
         // Create and register all of the nodes.
         for node_name in self.node_order.iter() {
-            let node_prop = self.nodes.get(node_name).unwrap();
+            let node_prop = self.nodes.get(node_name).expect(
+                "this is a bug: node_name should have been recorded in the node property map; please open a GitHub issue",
+            );
 
             let shape =
-                Self::get_shape_from_attributes(dir, node_prop, node_name);
+                Self::get_shape_from_attributes(dir, node_prop, node_name)?;
             let subgraph_idx =
                 *self.node_subgraphs.get(node_name).unwrap_or(&0);
             let handle =
@@ -341,13 +348,17 @@ impl GraphBuilder {
                 edge_prop.is_directed,
                 edge_prop.from_port.clone(),
                 edge_prop.to_port.clone(),
+            )?;
+            let from = node_map.get(&edge_prop.from).expect(
+                "this is a bug: edge source should have been recorded in the node handle map; please open a GitHub issue",
             );
-            let from = node_map.get(&edge_prop.from).unwrap();
-            let to = node_map.get(&edge_prop.to).unwrap();
+            let to = node_map.get(&edge_prop.to).expect(
+                "this is a bug: edge target should have been recorded in the node handle map; please open a GitHub issue",
+            );
             vg.add_edge(shape, *from, *to);
         }
 
-        vg
+        Ok(vg)
     }
 
     fn get_arrow_from_attributes(
@@ -355,7 +366,7 @@ impl GraphBuilder {
         has_arrow: bool,
         from_port: Option<String>,
         to_port: Option<String>,
-    ) -> Arrow {
+    ) -> Result<Arrow, String> {
         let mut line_width = 1;
         let mut font_size: usize = 14;
         let start = LineEndKind::None;
@@ -371,15 +382,15 @@ impl GraphBuilder {
         let mut line_style = LineStyleKind::Normal;
 
         if let Option::Some(val) = lst.get(&"label".to_string()) {
-            label = Self::get_label_content(val);
+            label = Self::get_label_content(val)?;
         }
 
         if let Option::Some(val) = lst.get(&"headlabel".to_string()) {
-            head_label = Self::get_label_content(val);
+            head_label = Self::get_label_content(val)?;
         }
 
         if let Option::Some(val) = lst.get(&"taillabel".to_string()) {
-            tail_label = Self::get_label_content(val);
+            tail_label = Self::get_label_content(val)?;
         }
 
         if let Option::Some(DotString::String(stl)) =
@@ -426,23 +437,25 @@ impl GraphBuilder {
         );
         arrow.head_label = head_label;
         arrow.tail_label = tail_label;
-        arrow
+        Ok(arrow)
     }
 
-    fn get_label_content(val: &DotString) -> Option<ShapeContent> {
+    fn get_label_content(
+        val: &DotString,
+    ) -> Result<Option<ShapeContent>, String> {
         match val {
             DotString::String(val) => {
                 if val.is_empty() {
-                    Option::None
+                    Ok(Option::None)
                 } else {
-                    Option::Some(ShapeContent::String(
+                    Ok(Option::Some(ShapeContent::String(
                         decode_quoted_label_entities(val),
-                    ))
+                    )))
                 }
             }
-            DotString::HtmlString(val) => Option::Some(ShapeContent::Html(
-                parse_html_string(val).unwrap(),
-            )),
+            DotString::HtmlString(val) => {
+                parse_html_string(val).map(ShapeContent::Html).map(Some)
+            }
         }
     }
 
@@ -462,7 +475,7 @@ impl GraphBuilder {
         dir: Orientation,
         lst: &PropertyList,
         default_name: &str,
-    ) -> Element {
+    ) -> Result<Element, String> {
         let mut label = ShapeContent::String(default_name.to_string());
         let mut edge_color = String::from("black");
         let mut fill_color = String::from("white");
@@ -483,7 +496,7 @@ impl GraphBuilder {
                         ShapeKind::Circle(ShapeContent::String(decoded_label));
                 }
                 DotString::HtmlString(val) => {
-                    label = ShapeContent::Html(parse_html_string(val).unwrap());
+                    label = ShapeContent::Html(parse_html_string(val)?);
                     shape = ShapeKind::None(label.clone());
                 }
             }
@@ -602,14 +615,21 @@ impl GraphBuilder {
             rounded_corder_value,
             font_size,
         );
-        Element::create(shape, look, dir, sz)
+        Ok(Element::create(shape, look, dir, sz))
     }
 
     fn get_graph_label_from_attributes(
         dir: Orientation,
         lst: &PropertyList,
-    ) -> Option<Element> {
-        let mut label = lst.get("label").and_then(Self::get_label_content)?;
+    ) -> Result<Option<Element>, String> {
+        let Some(mut label) = lst
+            .get("label")
+            .map(Self::get_label_content)
+            .transpose()?
+            .flatten()
+        else {
+            return Ok(None);
+        };
         let mut font_size: usize = 14;
         let valign = Self::get_label_location(lst, VAlign::Top);
 
@@ -630,7 +650,7 @@ impl GraphBuilder {
             StyleAttr::new(Color::fast("black"), 0, None, 0, font_size);
         look.valign = valign;
         let sz = get_shape_size(dir, &shape, font_size, false);
-        Some(Element::create(shape, look, dir, sz))
+        Ok(Some(Element::create(shape, look, dir, sz)))
     }
 
     fn get_label_location(lst: &PropertyList, default: VAlign) -> VAlign {
@@ -645,17 +665,19 @@ impl GraphBuilder {
         dir: Orientation,
         lst: &PropertyList,
         default_name: &str,
-    ) -> Element {
-        let label =
-            lst.get("label")
-                .and_then(Self::get_label_content)
-                .or_else(|| {
-                    if default_name.is_empty() || default_name == "main" {
-                        None
-                    } else {
-                        Some(ShapeContent::String(default_name.to_string()))
-                    }
-                });
+    ) -> Result<Element, String> {
+        let label = lst
+            .get("label")
+            .map(Self::get_label_content)
+            .transpose()?
+            .flatten()
+            .or_else(|| {
+                if default_name.is_empty() || default_name == "main" {
+                    None
+                } else {
+                    Some(ShapeContent::String(default_name.to_string()))
+                }
+            });
         let mut edge_color = String::from("black");
         let mut fill_color: Option<String> = None;
         let mut font_size: usize = 14;
@@ -702,6 +724,6 @@ impl GraphBuilder {
             font_size,
         );
         look.valign = valign;
-        Element::create_subgraph(dir, label, &look)
+        Ok(Element::create_subgraph(dir, label, &look))
     }
 }

@@ -19,6 +19,12 @@ pub(crate) fn parse_html_string(input: &str) -> Result<HtmlGrid, String> {
     parser.read_char();
     parser.lex();
     let x = parser.parse_html_label()?;
+    if !matches!(parser.tok, Token::EOF) {
+        return to_error(
+            format!("Unexpected token after HTML label: {:?}", parser.tok)
+                .as_str(),
+        );
+    }
     Ok(HtmlGrid::from_html(&x))
 }
 
@@ -346,11 +352,9 @@ impl HtmlParser {
     fn lex(&mut self) {
         match self.tok {
             Token::Error(pos) => {
-                panic!("can't parse after error at {}", pos);
+                let _ = pos;
             }
-            Token::EOF => {
-                panic!("can't parse after EOF");
-            }
+            Token::EOF => {}
             _ => {
                 // Lex the next token.
                 self.tok = self.next_token();
@@ -917,6 +921,9 @@ impl Image {
                 "src" => source = value.clone(),
                 _ => {}
             }
+        }
+        if source.is_empty() {
+            return to_error("HTML image tag requires a SRC attribute");
         }
         Ok(Self { scale, source })
     }

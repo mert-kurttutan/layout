@@ -127,8 +127,12 @@ fn main() {
             }
             let mut gb = GraphBuilder::new();
             gb.visit_graph(&g);
-            let mut vg = gb.get();
-            generate_svg(&mut vg, cli);
+            match gb.try_get() {
+                Result::Ok(mut vg) => generate_svg(&mut vg, cli),
+                Result::Err(err) => {
+                    log::error!("Could not build graph: {}", err);
+                }
+            }
         }
     }
 }
