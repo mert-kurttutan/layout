@@ -377,11 +377,9 @@ impl VisualGraph {
             let to = lst[1];
 
             // If the edge is empty then there is nothing to do.
-            if edge.0.text.is_none() {
+            let Some(text) = arrow.text.clone() else {
                 continue;
-            }
-
-            let text = arrow.text.clone().unwrap();
+            };
 
             // Create a new connection block.
             let dir = self.element(from).orientation;
