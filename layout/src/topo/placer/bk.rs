@@ -119,12 +119,15 @@ impl NodeAttachInfo {
             // Go up the vertical and save the nodes into the vector.
             vertical.push(NodeHandle::from(idx));
             assert!(self.below[idx].is_none(), "expected to be at the bottom!");
-            while self.above[idx].is_some() && !used[idx] {
+            while let Some(cur_node_handle) = self.above[idx] {
+                if used[idx] {
+                    break;
+                }
                 // Wipe out the node so it won't participate in future verticals.
                 used[idx] = true;
 
                 // Move up to the next node.
-                idx = self.above[idx].unwrap().get_index();
+                idx = cur_node_handle.get_index();
 
                 // Add the node to the vertical.
                 vertical.push(NodeHandle::from(idx));

@@ -974,15 +974,12 @@ impl DAG {
 
                 c_in_lvl_s = p_in_lvl_s + 1;
             } else {
-                if self.top_border_ranks[lvl_s].is_empty() {
+                if let Some(last) = self.top_border_ranks[lvl_s].last_mut() {
+                    last.push(*child_s);
+                    c_in_lvl_s = self.top_border_ranks[lvl_s].len() - 1;
+                } else {
                     self.top_border_ranks[lvl_s].push(vec![*child_s]);
                     c_in_lvl_s = 0;
-                } else {
-                    self.top_border_ranks[lvl_s]
-                        .last_mut()
-                        .unwrap()
-                        .push(*child_s);
-                    c_in_lvl_s = self.top_border_ranks[lvl_s].len() - 1;
                 }
             }
 
@@ -994,15 +991,12 @@ impl DAG {
                 }
                 c_in_lvl_e = p_in_lvl_e + 1;
             } else {
-                if self.bottom_border_ranks[lvl_e].is_empty() {
+                if let Some(last) = self.bottom_border_ranks[lvl_e].last_mut() {
+                    last.push(*child_s);
+                    c_in_lvl_e = self.bottom_border_ranks[lvl_e].len() - 1;
+                } else {
                     self.bottom_border_ranks[lvl_e].push(vec![*child_s]);
                     c_in_lvl_e = 0;
-                } else {
-                    self.bottom_border_ranks[lvl_e]
-                        .last_mut()
-                        .unwrap()
-                        .push(*child_s);
-                    c_in_lvl_e = self.bottom_border_ranks[lvl_e].len() - 1;
                 }
             }
 
@@ -1284,8 +1278,7 @@ impl DAG {
             vec![ContainerHandle::Subgraph(SubgraphHandle::new(0))];
         let mut output = vec![];
 
-        while !working_list.is_empty() {
-            let current = working_list.pop().unwrap();
+        while let Some(current) = working_list.pop() {
             match current {
                 ContainerHandle::Node(n) => {
                     output.push(n);
@@ -1344,8 +1337,7 @@ impl DAG {
             vec![ContainerHandle::Subgraph(SubgraphHandle::new(0))];
         let mut output = vec![];
 
-        while !working_list.is_empty() {
-            let current = working_list.pop().unwrap();
+        while let Some(current) = working_list.pop() {
             match current {
                 ContainerHandle::Node(n) => {
                     output.push(n);

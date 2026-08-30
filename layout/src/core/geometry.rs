@@ -304,11 +304,11 @@ fn get_width_of_line(label: &str) -> usize {
 /// Estimate the bounding box of some rendered text.
 pub fn get_size_for_str(label: &str, font_size: usize) -> Point {
     // Find the longest line.
-    let max_line_len = if !label.is_empty() {
-        label.lines().map(|x| get_width_of_line(x)).max().unwrap()
-    } else {
-        0
-    };
+    let max_line_len = label
+        .lines()
+        .map(|x| get_width_of_line(x))
+        .max()
+        .unwrap_or(0);
     let ts = (max_line_len.max(1), label.lines().count().max(1));
     Point::new(ts.0 as f64, ts.1 as f64).scale(font_size as f64)
 }

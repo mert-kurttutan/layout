@@ -41,19 +41,18 @@ impl<K: PartialEq + Clone + Hash + Eq, V: Clone> ScopedMap<K, V> {
     }
 
     pub fn insert(&mut self, key: &K, val: &V) {
-        assert!(!self.is_empty());
-        let scope = self.stack.last_mut().unwrap();
-        for pair in scope {
+        let scope = self
+            .stack
+            .last_mut()
+            .expect("insert requires an active scope");
+        for pair in scope.iter_mut() {
             if pair.0 == *key {
                 pair.1 = val.clone();
                 return;
             }
         }
 
-        self.stack
-            .last_mut()
-            .unwrap()
-            .push((key.clone(), val.clone()));
+        scope.push((key.clone(), val.clone()));
     }
 
     pub fn flatten(&self) -> HashMap<K, V> {

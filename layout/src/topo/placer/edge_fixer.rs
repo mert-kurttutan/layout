@@ -14,7 +14,7 @@ fn compute_bounds_for_node(vg: &VisualGraph, node: NodeHandle) -> (f64, f64) {
     assert!(!row.is_empty(), "Empty Row!");
 
     let pos = vg.pos(node);
-    let idx = row.iter().position(|x| *x == node).unwrap();
+    let idx = row.iter().position(|x| *x == node).expect("Node not found in row. This is a bug in the placer. Please report it on github issues.");
 
     // Calculate the leftmost point.
     let mut leftmost = f64::NEG_INFINITY;
@@ -82,8 +82,14 @@ fn straighten_edge(vg: &mut VisualGraph) -> usize {
 
     // Straighten the edges by moving the center block.
     for elem in to_straighten {
-        let pred = vg.dag.single_pred(elem).unwrap();
-        let succ = vg.dag.single_succ(elem).unwrap();
+        let pred = vg
+            .dag
+            .single_pred(elem)
+            .expect("This is a bug. Please report it in github issues");
+        let succ = vg
+            .dag
+            .single_succ(elem)
+            .expect("This is a bug. Please report it in github issues");
         let p1 = vg.pos(pred).center();
         let p2 = vg.pos(succ).center();
         let new_pos = p1.add(p2).scale(0.5);

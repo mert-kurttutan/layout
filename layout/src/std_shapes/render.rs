@@ -511,7 +511,10 @@ fn html_render_properties(
 }
 
 fn scope_kind(properties: Option<&RenderProperties>) -> ScopeKind {
-    if properties.and_then(|properties| properties.href.as_ref()).is_some() {
+    if properties
+        .and_then(|properties| properties.href.as_ref())
+        .is_some()
+    {
         ScopeKind::Link
     } else {
         ScopeKind::Plain
