@@ -273,6 +273,7 @@ pub(crate) struct TdAttr {
 pub(crate) struct Image {
     pub(crate) scale: Scale,
     pub(crate) source: String,
+    size: Point,
 }
 
 #[derive(Debug, Clone)]
@@ -925,21 +926,25 @@ impl Image {
         if source.is_empty() {
             return to_error("HTML image tag requires a SRC attribute");
         }
-        Ok(Self { scale, source })
+        let (width, height) = get_image_size(&source).map_err(|err| {
+            format!("Could not read HTML image source '{}': {}", source, err)
+        })?;
+        Ok(Self {
+            scale,
+            source,
+            size: Point::new(width as f64, height as f64),
+        })
     }
 
     fn width(&self) -> f64 {
-        let size = get_image_size(&self.source).unwrap();
-        size.0 as f64
+        self.size.x
     }
     fn height(&self) -> f64 {
-        let size = get_image_size(&self.source).unwrap();
-        size.1 as f64
+        self.size.y
     }
 
     pub(crate) fn size(&self) -> Point {
-        let size = get_image_size(&self.source).unwrap();
-        Point::new(size.0 as f64, size.1 as f64)
+        self.size
     }
 }
 
