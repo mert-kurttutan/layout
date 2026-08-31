@@ -6,15 +6,11 @@
 
 Current state:
 
-- `layout/src/gv/html.rs` calls `get_image_size(...).unwrap()` in `Image::width`, `Image::height`, and `Image::size`.
-- `layout/src/core/utils.rs` returns `Result<(u32, u32), Error>` from `get_image_size`, but that error is discarded by the unwraps.
-- `layout/src/std_shapes/render.rs` calls `img.size()` while rendering image cells, so a missing or invalid image can panic during render.
+- Image dimensions are loaded during HTML parsing and propagated as builder
+  errors, so missing or invalid image paths no longer panic during rendering.
 
 Required changes:
 
-- Change `Image::{width,height,size}` to return `Result` or cache a fallible size during HTML parsing/grid construction.
-- Propagate image-size failures through `parse_html_string`/`HtmlGrid` construction, or add a documented placeholder-size fallback.
-- Update `GraphBuilder::get_shape_from_attributes` so HTML parse/image errors are not hidden behind `unwrap()`.
 - Add a test for a missing `SRC` file that asserts an error path or placeholder behavior, not a panic.
 
 ### Make image hrefs portable
@@ -35,14 +31,11 @@ Required changes:
 
 Current state:
 
-- `GraphBuilder::get_shape_from_attributes` calls `parse_html_string(val).unwrap()`.
-- Some parser methods in `layout/src/gv/html.rs` use `panic!` for supposedly impossible states.
-- `GraphBuilder::get()` currently returns `VisualGraph`, so builder errors cannot be propagated.
+- `GraphBuilder::try_get()` returns builder errors, and the CLI uses that path.
+- HTML parse errors are propagated from graph, node, and edge labels.
+- Malformed HTML tests cover unclosed tags, invalid table structure, and invalid
+  image inputs.
 
 Required changes:
 
-- Change `GraphBuilder::get()` to return `Result<VisualGraph, String>`, or add a separate fallible builder path to preserve API compatibility.
-- Replace `parse_html_string(...).unwrap()` with error propagation.
 - Audit `panic!` calls in `layout/src/gv/html.rs` and keep only true internal invariant failures.
-- Update CLI error reporting in `src/bin/layout.rs` to print builder/render errors cleanly.
-- Add malformed HTML tests for unclosed tags, invalid table structure, and invalid image inputs.

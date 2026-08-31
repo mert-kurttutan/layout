@@ -618,7 +618,7 @@ impl HtmlParser {
                     match x {
                         _ => {
                             return Ok(TextItem::TaggedText(TaggedText {
-                                tag: TextTag::new(&tag, tag_attr),
+                                tag: TextTag::new(&tag, tag_attr)?,
                                 text_items,
                             }))
                         }
@@ -724,7 +724,7 @@ impl HtmlParser {
         }
         let table_attr = TableAttr::from_attr_list(table_attr2);
 
-        FontTable::try_new(rows, TableTag::from_tag(table_tag1), table_attr)
+        FontTable::try_new(rows, TableTag::from_tag(table_tag1)?, table_attr)
     }
 
     fn parse_tag_attr_list(
@@ -984,8 +984,11 @@ impl Font {
 }
 
 impl TextTag {
-    fn new(tag: &TagType, tag_attr_list: Vec<(String, String)>) -> Self {
-        match tag {
+    fn new(
+        tag: &TagType,
+        tag_attr_list: Vec<(String, String)>,
+    ) -> Result<Self, String> {
+        Ok(match tag {
             TagType::Font => {
                 let font = Font::from_tag_attr_list(tag_attr_list);
                 TextTag::Font(font)
@@ -997,14 +1000,20 @@ impl TextTag {
             TagType::Sub => TextTag::Sub,
             TagType::Sup => TextTag::Sup,
             TagType::S => TextTag::S,
-            _ => panic!("Invalid tag for text: {:?}", tag),
-        }
+            _ => {
+                return to_error(
+                    format!("Invalid tag for text: {:?}", tag).as_str(),
+                )
+            }
+        })
     }
 }
 
 impl TableTag {
-    fn from_tag(tag_pair: Option<(TagType, Vec<(String, String)>)>) -> Self {
-        if let Some(tag_inner) = tag_pair {
+    fn from_tag(
+        tag_pair: Option<(TagType, Vec<(String, String)>)>,
+    ) -> Result<Self, String> {
+        Ok(if let Some(tag_inner) = tag_pair {
             match tag_inner.0 {
                 TagType::Table => TableTag::None,
                 TagType::Font => TableTag::Font(Font::from_tag_attr_list(
@@ -1014,11 +1023,16 @@ impl TableTag {
                 TagType::B => TableTag::B,
                 TagType::U => TableTag::U,
                 TagType::O => TableTag::O,
-                _ => panic!("Invalid tag for table: {:?}", tag_inner.0),
+                _ => {
+                    return to_error(
+                        format!("Invalid tag for table: {:?}", tag_inner.0)
+                            .as_str(),
+                    )
+                }
             }
         } else {
             TableTag::None
-        }
+        })
     }
 }
 
