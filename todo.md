@@ -33,6 +33,7 @@ Current state:
 
 - `GraphBuilder::try_get()` returns builder errors, and the CLI uses that path.
 - HTML parse errors are propagated from graph, node, and edge labels.
+- DOT parser token advancement errors are returned instead of panicking.
 - Malformed HTML tests cover unclosed tags, invalid table structure, and invalid
   image inputs.
 

@@ -27,33 +27,35 @@ impl DotParser {
         self.lexer.print_error();
     }
 
-    pub fn lex(&mut self) {
-        match self.tok {
+    pub fn lex(&mut self) -> Result<(), String> {
+        match self.tok.clone() {
             Token::Error(_) => {
-                panic!("can't parse after error");
+                return to_error("can't parse after error");
             }
             Token::EOF => {
-                panic!("can't parse after EOF");
+                return to_error("can't parse after EOF");
             }
             _ => {
                 // Lex the next token.
                 self.tok = self.lexer.next_token();
             }
         }
+        Ok(())
     }
-    pub fn lex_html(&mut self) {
-        match self.tok {
+    pub fn lex_html(&mut self) -> Result<(), String> {
+        match self.tok.clone() {
             Token::Error(_) => {
-                panic!("can't parse after error");
+                return to_error("can't parse after error");
             }
             Token::EOF => {
-                panic!("can't parse after EOF");
+                return to_error("can't parse after EOF");
             }
             _ => {
                 // Lex the next token.
                 self.tok = self.lexer.next_token_html();
             }
         }
+        Ok(())
     }
 
     // graph : [ strict ] (graph | digraph) [ ID ] '{' stmt_list '}'
@@ -70,7 +72,7 @@ impl DotParser {
         if is_subgraph {
             // Consume the 'subgraph' keyword.
             if let Token::SubgraphKW = self.tok.clone() {
-                self.lex();
+                self.lex()?;
             } else {
                 return to_error("Expected 'subgraph'");
             }
@@ -78,11 +80,11 @@ impl DotParser {
             // Consume the optional graph name.
             if let Token::Identifier(name) = self.tok.clone() {
                 graph.name = name;
-                self.lex();
+                self.lex()?;
             }
 
             if let Token::OpenBrace = self.tok.clone() {
-                self.lex();
+                self.lex()?;
             } else {
                 return to_error("Expected '{'");
             }
@@ -92,18 +94,18 @@ impl DotParser {
 
         // Consume the 'strict' keyword.
         if let Token::StrictKW = self.tok.clone() {
-            self.lex();
+            self.lex()?;
         }
 
         match self.tok {
             Token::GraphKW => {
-                self.lex();
+                self.lex()?;
             }
             Token::DigraphKW => {
-                self.lex();
+                self.lex()?;
             }
             Token::SubgraphKW => {
-                self.lex();
+                self.lex()?;
             }
             _ => {
                 return to_error("Expected (graph|digraph)");
@@ -113,11 +115,11 @@ impl DotParser {
         // Consume the optional graph name.
         if let Token::Identifier(name) = self.tok.clone() {
             graph.name = name;
-            self.lex();
+            self.lex()?;
         }
 
         if let Token::OpenBrace = self.tok.clone() {
-            self.lex();
+            self.lex()?;
         } else {
             return to_error("Expected '{'");
         }
@@ -131,12 +133,12 @@ impl DotParser {
         loop {
             if let Token::Semicolon = self.tok.clone() {
                 // Consume the semicolon.
-                self.lex();
+                self.lex()?;
             }
 
             if let Token::CloseBrace = self.tok.clone() {
                 // Consume the '}' and exit.
-                self.lex();
+                self.lex()?;
                 return Result::Ok(lst);
             }
             let stmt = self.parse_stmt()?;
@@ -161,7 +163,7 @@ impl DotParser {
                         if id0.port.is_some() {
                             return to_error("Can't assign into a port");
                         }
-                        self.lex();
+                        self.lex()?;
                         let es = self.parse_attr_id()?;
                         let mut list = ast::AttributeList::new();
                         list.add_attr(id0.name, es);
@@ -176,7 +178,7 @@ impl DotParser {
                         Result::Ok(ns)
                     }
                     Token::Semicolon => {
-                        self.lex();
+                        self.lex()?;
                         let ns = ast::NodeStmt::new(id0);
                         let ns = ast::Stmt::Node(ns);
                         Result::Ok(ns)
@@ -207,19 +209,19 @@ impl DotParser {
             }
             //attr_stmt : (graph | node | edge) attr_list
             Token::GraphKW => {
-                self.lex();
+                self.lex()?;
                 let list = self.parse_attr_list()?;
                 let atts = ast::AttrStmt::new(ast::AttrStmtTarget::Graph, list);
                 Result::Ok(ast::Stmt::Attribute(atts))
             }
             Token::NodeKW => {
-                self.lex();
+                self.lex()?;
                 let list = self.parse_attr_list()?;
                 let atts = ast::AttrStmt::new(ast::AttrStmtTarget::Node, list);
                 Result::Ok(ast::Stmt::Attribute(atts))
             }
             Token::EdgeKW => {
-                self.lex();
+                self.lex()?;
                 let list = self.parse_attr_list()?;
                 let atts = ast::AttrStmt::new(ast::AttrStmtTarget::Edge, list);
                 Result::Ok(ast::Stmt::Attribute(atts))
@@ -227,7 +229,7 @@ impl DotParser {
 
             Token::OpenBrace => {
                 // Handle anonymous scopes:
-                self.lex();
+                self.lex()?;
                 let mut graph = ast::Graph::new(
                     format!("{}_anonymous_{}", self.lexer.pos, self.lexer.pos)
                         .as_str(),
@@ -244,7 +246,7 @@ impl DotParser {
         let mut lst = ast::AttributeList::new();
 
         if let Token::OpenBracket = self.tok.clone() {
-            self.lex();
+            self.lex()?;
         } else {
             return to_error("Expected '['");
         }
@@ -255,14 +257,14 @@ impl DotParser {
             if let Token::Identifier(id) = self.tok.clone() {
                 prop = id;
                 // Consume the property name.
-                self.lex();
+                self.lex()?;
             } else {
                 return to_error("Expected property name");
             }
 
             if let Token::Equal = self.tok.clone() {
                 // Consume the '='.
-                self.lex();
+                self.lex()?;
             } else {
                 return to_error("Expected '='");
             }
@@ -271,15 +273,15 @@ impl DotParser {
 
             // Skip semicolon.
             if let Token::Semicolon = self.tok.clone() {
-                self.lex()
+                self.lex()?
             }
             // Skip commas.
             if let Token::Comma = self.tok.clone() {
-                self.lex()
+                self.lex()?
             }
         }
         if let Token::CloseBracket = self.tok.clone() {
-            self.lex();
+            self.lex()?;
         } else {
             return to_error("Expected ']'");
         }
@@ -287,9 +289,9 @@ impl DotParser {
     }
     // Parses a string that is inside a HTML tag.
     pub fn parse_html_string(&mut self) -> Result<String, String> {
-        self.lex_html();
+        self.lex_html()?;
         if let Token::Identifier(s) = self.tok.clone() {
-            self.lex();
+            self.lex()?;
             Ok(s)
         } else {
             to_error("Expected a string")
@@ -305,7 +307,7 @@ impl DotParser {
         if let Token::HtmlStart = self.tok.clone() {
             let html = self.parse_html_string()?;
             if let Token::HtmlEnd = self.tok.clone() {
-                self.lex();
+                self.lex()?;
             } else {
                 return to_error(
                     format!("Expected '>', found {:?}", self.tok).as_str(),
@@ -314,7 +316,7 @@ impl DotParser {
             Result::Ok(DotString::HtmlString(html))
         } else if let Token::Identifier(value) = self.tok.clone() {
             // Consume the value name.
-            self.lex();
+            self.lex()?;
             Result::Ok(DotString::String(value))
         } else {
             to_error(
@@ -343,7 +345,7 @@ impl DotParser {
                 }
             };
             // Consume the arrow.
-            self.lex();
+            self.lex()?;
             let id = self.parse_node_id()?;
             es.insert(id, ak);
         }
@@ -361,17 +363,17 @@ impl DotParser {
         if let Token::Identifier(name) = self.tok.clone() {
             node_name = name;
             // Consume the value name.
-            self.lex();
+            self.lex()?;
         } else {
             return to_error("port");
         }
 
         if let Token::Colon = self.tok.clone() {
             // Consume the colon.
-            self.lex();
+            self.lex()?;
             if let Token::Identifier(port) = self.tok.clone() {
                 // Consume the port name.
-                self.lex();
+                self.lex()?;
                 return Result::Ok(ast::NodeId::new(&node_name, &Some(port)));
             } else {
                 return to_error("Expected a port name");
@@ -383,7 +385,7 @@ impl DotParser {
     /// Parses dot files, as specified here:
     /// <https://graphviz.org/doc/info/lang.html>
     pub fn process(&mut self) -> Result<ast::Graph, String> {
-        self.lex();
+        self.lex()?;
         let result = self.parse_graph(false)?;
         if let Token::EOF = self.tok {
             return Result::Ok(result);
