@@ -21,6 +21,7 @@ for arg in "$@"; do
 done
 
 mkdir -p out/original out/layout
+ln -sfn ../out scripts/out
 
 FAILURES=()
 
@@ -53,8 +54,8 @@ fi
 echo "Wrote SVG comparison files under out/original and out/layout."
 
 if [[ "$SERVE" == true ]]; then
-  echo "Serving http://localhost:$PORT/scripts/svg_compare.html"
-  python3 -m http.server "$PORT"
+  echo "Serving http://localhost:$PORT/"
+  python3 -m http.server "$PORT" --directory scripts
 else
-  echo "View them at /scripts/svg_compare.html when serving the repository root."
+  echo "View them at / when serving the scripts directory."
 fi

@@ -16,6 +16,7 @@ def --env main [
 
     mkdir out/original
     mkdir out/layout
+    ln -sfn ../out scripts/out
 
     # Process each .dot file in inputs directory
     for file in (ls inputs/*.dot | get name) {
@@ -49,9 +50,9 @@ def --env main [
 
     print "Wrote SVG comparison files under out/original and out/layout."
     if $serve {
-        print $"Serving http://localhost:($port)/scripts/svg_compare.html"
-        python3 -m http.server $port
+        print $"Serving http://localhost:($port)/"
+        python3 -m http.server $port --directory scripts
     } else {
-        print "View them at /scripts/svg_compare.html when serving the repository root."
+        print "View them at / when serving the scripts directory."
     }
 }

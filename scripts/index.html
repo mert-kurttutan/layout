@@ -100,7 +100,7 @@
     </div>
   </header>
   <main id="cases">
-    <div class="empty">Run <code>nu scripts/test.nu</code>, then edit the <code>cases</code> array if your browser blocks directory listings.</div>
+    <div class="empty">Run <code>scripts/test.nu</code>, then edit the <code>cases</code> array if your browser blocks directory listings.</div>
   </main>
 
   <script>
@@ -123,7 +123,7 @@
 
     async function listLayoutSvgs() {
       try {
-        const response = await fetch("../out/layout/");
+        const response = await fetch("out/layout/");
         const html = await response.text();
         return [...html.matchAll(/href="([^"]+\.svg)"/g)]
           .map((match) => decodeURIComponent(match[1].split("/").pop()))
@@ -143,7 +143,7 @@
 
       const pair = document.createElement("div");
       pair.className = "pair";
-      pair.append(svgPane(`../out/original/${name}`), svgPane(`../out/layout/${name}`));
+      pair.append(svgPane(`out/original/${name}`), svgPane(`out/layout/${name}`));
 
       section.append(title, pair);
       return section;
