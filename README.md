@@ -3,6 +3,12 @@
 Layout is a rust library and a stand alone utility that draws graphs. Layout
 can parse Graphviz dot files and render them.
 
+This repository is a fork of the original
+[nadavrot/layout](https://github.com/nadavrot/layout) project. The original
+repository is not actively maintained at the moment, so ongoing work is being
+published here. Changes are intended to be pushed upstream when the original
+project is maintained again.
+
 [![Latest Version]][crates.io] [![Docs Badge]][docs]
 
 [Latest Version]: https://img.shields.io/crates/v/layout-rs.svg
