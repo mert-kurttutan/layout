@@ -5,11 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SVG Comparison</title>
   <style>
+    :root {
+      color-scheme: light dark;
+      --page-bg: #f6f6f4;
+      --panel-bg: #fff;
+      --text: #222;
+      --muted-text: #555;
+      --rule: #d7d7d2;
+      --frame-border: #a8a8a0;
+      --frame-shadow: rgba(0, 0, 0, 0.12);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page-bg: #161616;
+        --panel-bg: #242424;
+        --text: #eee;
+        --muted-text: #b8b8b8;
+        --rule: #3a3a3a;
+        --frame-border: #666;
+        --frame-shadow: rgba(0, 0, 0, 0.45);
+      }
+    }
+
     body {
       margin: 0;
       font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #222;
-      background: #f6f6f4;
+      color: var(--text);
+      background: var(--page-bg);
     }
 
     header {
@@ -20,8 +43,8 @@
       grid-template-columns: 1fr;
       gap: 16px;
       padding: 12px 16px;
-      background: #fff;
-      border-bottom: 1px solid #d7d7d2;
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--rule);
     }
 
     h1 {
@@ -38,7 +61,7 @@
 
     .label {
       font-weight: 650;
-      color: #555;
+      color: var(--muted-text);
     }
 
     main {
@@ -47,7 +70,7 @@
 
     .case {
       margin-bottom: 28px;
-      border-top: 1px solid #d7d7d2;
+      border-top: 1px solid var(--rule);
     }
 
     .case h2 {
@@ -69,10 +92,10 @@
       box-sizing: border-box;
       padding: 20px 48px;
       overflow: auto;
-      border: 2px solid #a8a8a0;
+      border: 2px solid var(--frame-border);
       border-radius: 8px;
       background: #fff;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 1px 4px var(--frame-shadow);
       overscroll-behavior: contain;
     }
 
@@ -95,8 +118,8 @@
 
     .empty {
       padding: 20px;
-      background: #fff;
-      border: 1px solid #d7d7d2;
+      background: var(--panel-bg);
+      border: 1px solid var(--rule);
     }
   </style>
 </head>
