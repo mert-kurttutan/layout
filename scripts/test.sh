@@ -1,15 +1,60 @@
 #!/bin/bash
 
-# exit when any command fails
-set -e
+set -u
 
-ALL=
-for file in ./inputs/*.dot; do
-  NAME=/tmp/out_$RANDOM.svg
-  ALL="$NAME $ALL"
-  cargo run --bin layout $file -o $NAME $1 $2 $3
-  NAME=/tmp/out_$RANDOM.svg
-  ALL="$NAME $ALL"
-  dot -Tsvg $file -o $NAME
+ONLY_HTML=false
+SERVE=true
+PORT=8000
+
+for arg in "$@"; do
+  case "${arg,,}" in
+    only-html | --only-html)
+      ONLY_HTML=true
+      ;;
+    --no-serve)
+      SERVE=false
+      ;;
+    --port=*)
+      PORT="${arg#*=}"
+      ;;
+  esac
 done
-echo $ALL | xargs firefox &
+
+mkdir -p out/original out/layout
+
+FAILURES=()
+
+for file in ./inputs/*.dot; do
+  if [[ "$ONLY_HTML" == true && "$file" != *html* ]]; then
+    continue
+  fi
+
+  stem=$(basename "$file" .dot)
+  original_svg="out/original/$stem.svg"
+  layout_svg="out/layout/$stem.svg"
+
+  if ! original_error=$(dot -Tsvg "$file" -o "$original_svg" 2>&1); then
+    FAILURES+=("original $file: $original_error")
+    continue
+  fi
+
+  if ! layout_error=$(cargo run --bin layout "$file" -o "$layout_svg" 2>&1); then
+    FAILURES+=("layout $file: $layout_error")
+  fi
+done
+
+if [[ "${#FAILURES[@]}" -gt 0 ]]; then
+  echo "Some files failed to render:"
+  for failure in "${FAILURES[@]}"; do
+    echo "- $failure"
+  done
+fi
+
+echo "Wrote SVG comparison files under out/original and out/layout."
+
+if [[ "$SERVE" == true ]]; then
+  echo "Serving http://localhost:$PORT/scripts/svg_compare.html"
+  python3 -m http.server "$PORT"
+else
+  echo "View them at /scripts/svg_compare.html when serving the repository root."
+fi

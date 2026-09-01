@@ -1,12 +1,17 @@
+#!/usr/bin/env nu
+
 def --env main [
-    ...args: string  # Capture any additional arguments
+    mode?: string
+    --only-html
+    --no-serve
+    --port: string = "8000"
 ] {
-    mut only_html = false
+    mut only_html = $only_html
+    mut serve = not $no_serve
     mut failures = []
-    for arg in $args {
-        if ($arg | str contains --ignore-case 'only-html') {
-            $only_html = true
-        }
+
+    if (($mode | default "" | str lowercase) == "only-html") {
+        $only_html = true
     }
 
     mkdir out/original
@@ -43,5 +48,10 @@ def --env main [
     }
 
     print "Wrote SVG comparison files under out/original and out/layout."
-    print "View them at /scripts/svg_compare.html when serving the repository root."
+    if $serve {
+        print $"Serving http://localhost:($port)/scripts/svg_compare.html"
+        python3 -m http.server $port
+    } else {
+        print "View them at /scripts/svg_compare.html when serving the repository root."
+    }
 }
