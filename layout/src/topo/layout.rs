@@ -9,9 +9,12 @@ extern crate log;
 
 use crate::adt::dag::*;
 use crate::core::base::Orientation;
+use crate::core::format::RectSides;
 use crate::core::format::RenderBackend;
+use crate::core::format::RenderProperties;
 use crate::core::format::Renderable;
 use crate::core::format::Visible;
+use crate::core::geometry::get_connection_point_for_box;
 use crate::core::geometry::get_size_for_str;
 use crate::core::geometry::Point;
 use crate::core::geometry::Position;
@@ -26,6 +29,132 @@ use std::vec;
 
 use super::placer::Placer;
 
+const SUBGRAPH_PADDING: f64 = 60.;
+
+#[derive(Debug)]
+struct SubgraphFrame {
+    label: Option<ShapeContent>,
+    pos: Position,
+    look: StyleAttr,
+    orientation: Orientation,
+    properties: Option<String>,
+}
+
+impl SubgraphFrame {
+    fn new(
+        orientation: Orientation,
+        label: Option<ShapeContent>,
+        look: &StyleAttr,
+    ) -> Self {
+        Self {
+            label,
+            pos: Position::new(
+                Point::new(25., 25.),
+                Point::new(20., 20.),
+                Point::new(25., 25.),
+                Point::splat(SUBGRAPH_PADDING),
+            ),
+            look: look.clone(),
+            orientation,
+            properties: None,
+        }
+    }
+
+    fn size_label(&self) -> Point {
+        match &self.label {
+            Some(ShapeContent::String(label)) => {
+                get_size_for_str(label, self.look.font_size)
+            }
+            Some(ShapeContent::Html(html)) => html.size(self.look.font_size),
+            None => Point::zero(),
+        }
+    }
+}
+
+impl Visible for SubgraphFrame {
+    fn position(&self) -> Position {
+        self.pos
+    }
+
+    fn position_mut(&mut self) -> &mut Position {
+        &mut self.pos
+    }
+
+    fn is_connector(&self) -> bool {
+        false
+    }
+
+    fn transpose(&mut self) {
+        self.orientation = self.orientation.flip();
+        self.pos.transpose();
+    }
+
+    fn resize(&mut self) {}
+}
+
+impl Renderable for SubgraphFrame {
+    fn render(&self, debug: bool, rb: &mut dyn RenderBackend) {
+        rb.draw_rect(
+            self.pos.bbox(false).0,
+            self.pos.size(false),
+            &self.look,
+            self.properties.clone().map(RenderProperties::raw),
+            None,
+            RectSides::all(),
+        );
+        if let Some(label) = &self.label {
+            let text_size = content_size(label, self.look.font_size);
+            let frame = self.pos.bbox(false);
+            let label_y = match self.look.valign {
+                VAlign::Bottom => {
+                    frame.1.y - text_size.y / 2. - BORDER_PADDING / 2.
+                }
+                _ => frame.0.y + text_size.y / 2. + BORDER_PADDING / 2.,
+            };
+            let text_pos = Point::new(self.pos.middle().x, label_y);
+            draw_shape_content(label, text_pos, text_size, &self.look, rb);
+        }
+        if debug {
+            rb.draw_circle(
+                self.pos.center(),
+                Point::new(6., 6.),
+                &StyleAttr::debug2(),
+                None,
+            );
+        }
+    }
+
+    fn get_connector_location(
+        &self,
+        from: Point,
+        force: f64,
+        port: &Option<String>,
+    ) -> (Point, Point) {
+        let _ = port;
+        get_connection_point_for_box(
+            self.pos.center(),
+            self.pos.size(false),
+            from,
+            force,
+        )
+    }
+
+    fn get_passthrough_path(
+        &self,
+        from: Point,
+        to: Point,
+        force: f64,
+    ) -> (Point, Point) {
+        let _ = to;
+        get_connection_point_for_box(
+            self.pos.center(),
+            self.pos.size(false),
+            from,
+            force,
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct VisualGraph {
     // Optional top-level graph label.
@@ -33,7 +162,7 @@ pub struct VisualGraph {
     // Holds all of the elements in the graph.
     nodes: Vec<Element>,
     // Holds all of the subgraph frames in the graph.
-    subgraphs: Vec<Element>,
+    subgraphs: Vec<SubgraphFrame>,
     // The arrows and the list of elements that they visits.
     edges: Vec<(Arrow, Vec<NodeHandle>)>,
     // Contains a list of self-edges. We use this as a temporary storage during
@@ -51,7 +180,7 @@ pub struct VisualGraph {
 
 impl VisualGraph {
     pub fn new(orientation: Orientation) -> Self {
-        let main_graph = Element::create_subgraph(
+        let main_graph = SubgraphFrame::new(
             orientation,
             None,
             &StyleAttr::new(
@@ -114,17 +243,7 @@ impl VisualGraph {
     }
 
     pub fn size_sg_label(&self, sg: SubgraphHandle) -> Point {
-        let font_size = self.subgraphs[sg.get_index()].look.font_size;
-        match &self.subgraphs[sg.get_index()].shape {
-            ShapeKind::Frame(Some(ShapeContent::String(label))) => {
-                get_size_for_str(label, font_size)
-            }
-            ShapeKind::Frame(Some(ShapeContent::Html(html))) => {
-                html.size(font_size)
-            }
-            ShapeKind::Frame(None) => Point::zero(),
-            _ => panic!("Subgraph does not have a frame shape"),
-        }
+        self.subgraphs[sg.get_index()].size_label()
     }
 
     pub fn is_connector(&self, n: NodeHandle) -> bool {
@@ -197,12 +316,14 @@ impl VisualGraph {
 
     pub fn add_subgraph(
         &mut self,
-        elem: Element,
+        label: Option<ShapeContent>,
+        look: &StyleAttr,
         parent_subgraph_idx: SubgraphHandle,
     ) -> SubgraphHandle {
         let res = self.dag.new_subgraph(parent_subgraph_idx);
         assert!(res.get_index() == self.subgraphs.len());
-        self.subgraphs.push(elem);
+        self.subgraphs
+            .push(SubgraphFrame::new(self.orientation, label, look));
         res
     }
 }

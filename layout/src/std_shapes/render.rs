@@ -93,16 +93,6 @@ pub fn get_shape_size(
             get_size_for_content(text, font),
             BOX_SHAPE_PADDING,
         ),
-        ShapeKind::Frame(label) => {
-            if let Some(label) = label {
-                pad_shape_scalar(
-                    get_size_for_content(label, font),
-                    BOX_SHAPE_PADDING,
-                )
-            } else {
-                Point::new(1., 1.)
-            }
-        }
     };
     if make_xy_same {
         res = make_size_square(res);
@@ -658,7 +648,7 @@ fn visit_record(
     }
 }
 
-fn draw_shape_content(
+pub(crate) fn draw_shape_content(
     content: &ShapeContent,
     loc: Point,
     size: Point,
@@ -675,7 +665,7 @@ fn draw_shape_content(
     }
 }
 
-fn content_size(content: &ShapeContent, font_size: usize) -> Point {
+pub(crate) fn content_size(content: &ShapeContent, font_size: usize) -> Point {
     match content {
         ShapeContent::String(text) => get_size_for_str(text, font_size),
         ShapeContent::Html(html) => html.size(font_size),
@@ -840,30 +830,6 @@ impl Renderable for Element {
                     );
                 }
             }
-            ShapeKind::Frame(label) => {
-                canvas.draw_rect(
-                    self.pos.bbox(false).0,
-                    self.pos.size(false),
-                    &self.look,
-                    raw_render_properties(self.properties.clone()),
-                    Option::None,
-                    RectSides::all(),
-                );
-                if let Some(label) = label {
-                    let text_size = content_size(label, self.look.font_size);
-                    let frame = self.pos.bbox(false);
-                    let label_y = match self.look.valign {
-                        VAlign::Bottom => {
-                            frame.1.y - text_size.y / 2. - BORDER_PADDING / 2.
-                        }
-                        _ => frame.0.y + text_size.y / 2. + BORDER_PADDING / 2.,
-                    };
-                    let text_pos = Point::new(self.pos.middle().x, label_y);
-                    draw_shape_content(
-                        label, text_pos, text_size, &self.look, canvas,
-                    );
-                }
-            }
         }
         if debug {
             canvas.draw_circle(
@@ -1017,12 +983,6 @@ impl Renderable for Element {
                     }
                 }
             }
-            ShapeKind::Frame(_) => get_connection_point_for_box(
-                self.pos.center(),
-                self.pos.size(false),
-                from,
-                force,
-            ),
             _ => {
                 unreachable!();
             }

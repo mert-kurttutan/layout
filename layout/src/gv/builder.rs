@@ -312,12 +312,11 @@ impl GraphBuilder {
         let mut subgraph_handles = vec![SubgraphHandle::new(0)];
         for subgraph in self.subgraphs.iter().skip(1) {
             let parent = subgraph_handles[subgraph.parent];
-            let elem = Self::get_subgraph_shape_from_attributes(
-                dir,
+            let (label, look) = Self::get_subgraph_attrs_from_attributes(
                 &subgraph.props,
                 &subgraph.name,
             )?;
-            let handle = vg.add_subgraph(elem, parent);
+            let handle = vg.add_subgraph(label, &look, parent);
             subgraph_handles.push(handle);
         }
 
@@ -661,11 +660,10 @@ impl GraphBuilder {
         }
     }
 
-    fn get_subgraph_shape_from_attributes(
-        dir: Orientation,
+    fn get_subgraph_attrs_from_attributes(
         lst: &PropertyList,
         default_name: &str,
-    ) -> Result<Element, String> {
+    ) -> Result<(Option<ShapeContent>, StyleAttr), String> {
         let label = lst
             .get("label")
             .map(Self::get_label_content)
@@ -724,6 +722,6 @@ impl GraphBuilder {
             font_size,
         );
         look.valign = valign;
-        Ok(Element::create_subgraph(dir, label, &look))
+        Ok((label, look))
     }
 }

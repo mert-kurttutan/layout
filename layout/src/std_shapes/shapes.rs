@@ -51,7 +51,6 @@ pub enum ShapeKind {
     DoubleCircle(ShapeContent),
     Record(RecordDef),
     Connector(Option<ShapeContent>),
-    Frame(Option<ShapeContent>),
 }
 
 impl ShapeKind {
@@ -146,25 +145,6 @@ impl Element {
                 Point::zero(),
                 Point::zero(),
                 Point::splat(CONN_PADDING),
-            ),
-            properties: Option::None,
-        }
-    }
-
-    pub fn create_subgraph(
-        orientation: Orientation,
-        label: Option<ShapeContent>,
-        look: &StyleAttr,
-    ) -> Element {
-        Element {
-            shape: ShapeKind::Frame(label),
-            look: look.clone(),
-            orientation,
-            pos: Position::new(
-                Point::new(25., 25.),
-                Point::new(20., 20.),
-                Point::new(25., 25.),
-                Point::splat(PADDING),
             ),
             properties: Option::None,
         }
