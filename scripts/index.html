@@ -66,21 +66,30 @@
     .viewport {
       width: 100%;
       height: 520px;
+      box-sizing: border-box;
+      padding: 20px 48px;
       overflow: auto;
-      border: 1px solid #d7d7d2;
+      border: 2px solid #a8a8a0;
+      border-radius: 8px;
       background: #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
       overscroll-behavior: contain;
     }
 
     .svgHost {
       display: inline-block;
-      min-width: 100%;
-      min-height: 100%;
-      padding: 12px;
-      transform-origin: top left;
+      box-sizing: border-box;
+      min-width: max-content;
+      min-height: max-content;
+      padding: 20px 64px;
     }
 
     .svgHost svg {
+      display: block;
+      transform-origin: top left;
+    }
+
+    .svgHost .missing {
       display: block;
     }
 
@@ -174,7 +183,7 @@
         host.innerHTML = await response.text();
         applyZoom(host, Number(host.dataset.zoom));
       } catch (error) {
-        host.textContent = `Could not load ${host.dataset.src}: ${error.message}`;
+        host.innerHTML = `<span class="missing">Could not load ${host.dataset.src}: ${error.message}</span>`;
       }
     }
 
@@ -202,9 +211,17 @@
     }
 
     function applyZoom(host, zoom) {
-      host.style.transform = `scale(${zoom})`;
-      host.style.marginRight = `${host.scrollWidth * (zoom - 1)}px`;
-      host.style.marginBottom = `${host.scrollHeight * (zoom - 1)}px`;
+      const svg = host.querySelector("svg");
+      if (!svg) {
+        return;
+      }
+
+      const baseWidth = Number(svg.getAttribute("width")) || svg.viewBox.baseVal.width;
+      const baseHeight = Number(svg.getAttribute("height")) || svg.viewBox.baseVal.height;
+
+      svg.style.transform = `scale(${zoom})`;
+      svg.style.marginRight = `${baseWidth * (zoom - 1)}px`;
+      svg.style.marginBottom = `${baseHeight * (zoom - 1)}px`;
     }
   </script>
 </body>
