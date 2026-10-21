@@ -67,6 +67,20 @@ pub(crate) enum ContainerHandle {
     Subgraph(SubgraphHandle),
 }
 
+/// The acyclic, sibling-local representation of Sanders' subgraph ordering
+/// graph. Each family contains the direct children of one nesting-tree node;
+/// precedence edges describe the "is left of" constraints between them.
+#[derive(Debug, Clone)]
+pub(crate) struct SubgraphOrderingGraph {
+    families: Vec<SubgraphOrderingFamily>,
+}
+
+#[derive(Debug, Clone)]
+struct SubgraphOrderingFamily {
+    children: Vec<ContainerHandle>,
+    successors: Vec<Vec<usize>>,
+}
+
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
 pub struct SubgraphHandle {
     pub idx: usize,
@@ -1379,6 +1393,681 @@ impl DAG {
         output
     }
 
+    fn child_containers(&self, parent: SubgraphHandle) -> Vec<ContainerHandle> {
+        let mut children = Vec::new();
+        for subgraph in self.nesting_tree.subgraphs[parent.idx].subgraphs.iter()
+        {
+            children.push(ContainerHandle::Subgraph(*subgraph));
+        }
+        for node in self.nesting_tree.subgraphs[parent.idx].nodes.iter() {
+            children.push(ContainerHandle::Node(*node));
+        }
+        children
+    }
+
+    /// Return the direct child of `ancestor` that contains `node`. This is the
+    /// `w` (or `w'`) used in Sanders' ordering-graph definition.
+    fn child_container_under(
+        &self,
+        ancestor: SubgraphHandle,
+        node: NodeHandle,
+    ) -> Option<ContainerHandle> {
+        let parent = self.get_parent_subgraph_index_n(node);
+        if parent == ancestor {
+            return Some(ContainerHandle::Node(node));
+        }
+
+        let path = self.subgraph_path(parent);
+        path.iter()
+            .position(|subgraph| *subgraph == ancestor)
+            .and_then(|idx| path.get(idx + 1).copied())
+            .map(ContainerHandle::Subgraph)
+    }
+
+    fn container_priority(
+        node_priorities: &[usize],
+        subgraph_priorities: &[usize],
+        container: ContainerHandle,
+    ) -> usize {
+        match container {
+            ContainerHandle::Node(node) => node_priorities[node.idx],
+            ContainerHandle::Subgraph(subgraph) => {
+                subgraph_priorities[subgraph.idx]
+            }
+        }
+    }
+
+    fn set_container_priority(
+        node_priorities: &mut [usize],
+        subgraph_priorities: &mut [usize],
+        container: ContainerHandle,
+        priority: usize,
+    ) {
+        match container {
+            ContainerHandle::Node(node) => node_priorities[node.idx] = priority,
+            ContainerHandle::Subgraph(subgraph) => {
+                subgraph_priorities[subgraph.idx] = priority
+            }
+        }
+    }
+
+    /// Select a useful initial global orientation before building the Sanders
+    /// ordering graph. Connectivity to direct sibling nodes supplies a soft
+    /// signal here; the subsequent ordering graph supplies the hard compound
+    /// layout constraints.
+    fn connectivity_seed_priorities(&self) -> (Vec<usize>, Vec<usize>) {
+        let (subgraph_positions, node_positions) = self.aggregate_position();
+        let mut node_priorities = vec![usize::MAX; self.nodes.len()];
+        let mut subgraph_priorities = vec![usize::MAX; self.num_subgraphs()];
+
+        for parent_idx in 0..self.num_subgraphs() {
+            let parent = SubgraphHandle::new(parent_idx);
+            let children = self.child_containers(parent);
+            let child_count = children.len();
+            if child_count == 0 {
+                continue;
+            }
+
+            let mut votes = vec![vec![0usize; child_count]; child_count];
+            let mut connectivity_edges = Vec::new();
+            for (from_idx, node) in self.nodes.iter().enumerate() {
+                for successor in &node.successors {
+                    let from = NodeHandle::new(from_idx);
+                    let Some(from_child) =
+                        self.child_container_under(parent, from)
+                    else {
+                        continue;
+                    };
+                    let Some(to_child) =
+                        self.child_container_under(parent, *successor)
+                    else {
+                        continue;
+                    };
+                    if from_child == to_child {
+                        continue;
+                    }
+
+                    // Edges between two compound children should not dictate
+                    // their left/right order. Edges to a direct leaf are a
+                    // useful soft placement signal for external routing.
+                    if !matches!(from_child, ContainerHandle::Node(_))
+                        && !matches!(to_child, ContainerHandle::Node(_))
+                    {
+                        continue;
+                    }
+
+                    let from_idx = children
+                        .iter()
+                        .position(|child| *child == from_child)
+                        .expect("a nesting-tree child must be in its family");
+                    let to_idx = children
+                        .iter()
+                        .position(|child| *child == to_child)
+                        .expect("a nesting-tree child must be in its family");
+                    votes[from_idx][to_idx] += 10;
+                    connectivity_edges.push((from_idx, to_idx));
+                }
+            }
+
+            let mut positions = children
+                .iter()
+                .map(|child| {
+                    Self::container_position(
+                        &subgraph_positions,
+                        &node_positions,
+                        *child,
+                    )
+                })
+                .collect::<Vec<_>>();
+            for _ in 0..child_count {
+                let mut changed = false;
+                for (from, to) in &connectivity_edges {
+                    match (children[*from], children[*to]) {
+                        (
+                            ContainerHandle::Subgraph(_),
+                            ContainerHandle::Node(_),
+                        )
+                        | (
+                            ContainerHandle::Node(_),
+                            ContainerHandle::Node(_),
+                        ) => {
+                            let target = positions[*from] + 0.25;
+                            if target < positions[*to] {
+                                positions[*to] = target;
+                                changed = true;
+                            }
+                        }
+                        (
+                            ContainerHandle::Node(_),
+                            ContainerHandle::Subgraph(_),
+                        ) => {
+                            let target = positions[*to] - 0.25;
+                            if (target - positions[*from]).abs() > f64::EPSILON
+                            {
+                                positions[*from] = target;
+                                changed = true;
+                            }
+                        }
+                        (
+                            ContainerHandle::Subgraph(_),
+                            ContainerHandle::Subgraph(_),
+                        ) => {}
+                    }
+                }
+                if !changed {
+                    break;
+                }
+            }
+
+            for row in &self.ranks {
+                for pair in row.windows(2) {
+                    let Some(left) =
+                        self.child_container_under(parent, pair[0])
+                    else {
+                        continue;
+                    };
+                    let Some(right) =
+                        self.child_container_under(parent, pair[1])
+                    else {
+                        continue;
+                    };
+                    if left == right {
+                        continue;
+                    }
+                    let left_idx = children
+                        .iter()
+                        .position(|child| *child == left)
+                        .expect("a nesting-tree child must be in its family");
+                    let right_idx = children
+                        .iter()
+                        .position(|child| *child == right)
+                        .expect("a nesting-tree child must be in its family");
+                    votes[left_idx][right_idx] += 1;
+                }
+            }
+
+            let mut successors = vec![Vec::new(); child_count];
+            let mut indegree = vec![0usize; child_count];
+            for left in 0..child_count {
+                for right in 0..child_count {
+                    if left == right || votes[left][right] == 0 {
+                        continue;
+                    }
+                    if votes[left][right] > votes[right][left]
+                        && positions[left] <= positions[right]
+                    {
+                        successors[left].push(right);
+                        indegree[right] += 1;
+                    }
+                }
+            }
+
+            let mut ready = (0..child_count)
+                .filter(|idx| indegree[*idx] == 0)
+                .collect::<Vec<_>>();
+            let mut order = Vec::with_capacity(child_count);
+            while !ready.is_empty() {
+                let ready_idx = ready
+                    .iter()
+                    .enumerate()
+                    .min_by(|(_, left), (_, right)| {
+                        positions[**left]
+                            .partial_cmp(&positions[**right])
+                            .unwrap()
+                            .then_with(|| left.cmp(right))
+                    })
+                    .map(|(idx, _)| idx)
+                    .expect("a non-empty ready list has a minimum");
+                let current = ready.swap_remove(ready_idx);
+                order.push(current);
+                for successor in &successors[current] {
+                    indegree[*successor] -= 1;
+                    if indegree[*successor] == 0 {
+                        ready.push(*successor);
+                    }
+                }
+            }
+
+            if order.len() < child_count {
+                let mut remaining = (0..child_count)
+                    .filter(|idx| !order.contains(idx))
+                    .collect::<Vec<_>>();
+                remaining.sort_by(|left, right| {
+                    positions[*left].partial_cmp(&positions[*right]).unwrap()
+                });
+                order.extend(remaining);
+            }
+
+            for (priority, child_idx) in order.iter().enumerate() {
+                Self::set_container_priority(
+                    &mut node_priorities,
+                    &mut subgraph_priorities,
+                    children[*child_idx],
+                    priority,
+                );
+            }
+        }
+
+        (node_priorities, subgraph_priorities)
+    }
+
+    pub(crate) fn order_subgraphs_by_connectivity_seed(&mut self) {
+        let (node_priorities, subgraph_priorities) =
+            self.connectivity_seed_priorities();
+        let (subgraph_positions, node_positions) = self.aggregate_position();
+        let mut worklist =
+            vec![ContainerHandle::Subgraph(SubgraphHandle::new(0))];
+        let mut output = Vec::new();
+
+        while let Some(current) = worklist.pop() {
+            match current {
+                ContainerHandle::Node(node) => output.push(node),
+                ContainerHandle::Subgraph(subgraph) => {
+                    let mut children = self.child_containers(subgraph);
+                    children.sort_by(|left, right| {
+                        let left_priority = Self::container_priority(
+                            &node_priorities,
+                            &subgraph_priorities,
+                            *left,
+                        );
+                        let right_priority = Self::container_priority(
+                            &node_priorities,
+                            &subgraph_priorities,
+                            *right,
+                        );
+                        if left_priority != right_priority {
+                            right_priority.cmp(&left_priority)
+                        } else {
+                            let left_position = Self::container_position(
+                                &subgraph_positions,
+                                &node_positions,
+                                *left,
+                            );
+                            let right_position = Self::container_position(
+                                &subgraph_positions,
+                                &node_positions,
+                                *right,
+                            );
+                            right_position.partial_cmp(&left_position).unwrap()
+                        }
+                    });
+                    worklist.extend(children);
+                }
+            }
+        }
+
+        for row in &mut self.ranks {
+            row.clear();
+        }
+        for node in output {
+            let level = self.level(node);
+            self.ranks[level].push(node);
+        }
+    }
+
+    fn container_position(
+        subgraph_positions: &[f64],
+        node_positions: &[f64],
+        container: ContainerHandle,
+    ) -> f64 {
+        match container {
+            ContainerHandle::Node(node) => node_positions[node.idx],
+            ContainerHandle::Subgraph(subgraph) => {
+                subgraph_positions[subgraph.idx]
+            }
+        }
+    }
+
+    fn make_ordering_acyclic(
+        mut edges: Vec<Vec<bool>>,
+        positions: &[f64],
+    ) -> Vec<Vec<bool>> {
+        loop {
+            let node_count = edges.len();
+            let mut indegree = vec![0usize; node_count];
+            for successors in &edges {
+                for (to, exists) in successors.iter().enumerate() {
+                    if *exists {
+                        indegree[to] += 1;
+                    }
+                }
+            }
+
+            let mut remaining = vec![true; node_count];
+            let mut processed = 0;
+            loop {
+                let next = (0..node_count)
+                    .filter(|idx| remaining[*idx] && indegree[*idx] == 0)
+                    .min_by(|left, right| {
+                        positions[*left]
+                            .partial_cmp(&positions[*right])
+                            .unwrap()
+                            .then_with(|| left.cmp(right))
+                    });
+                let Some(next) = next else {
+                    break;
+                };
+
+                remaining[next] = false;
+                processed += 1;
+                for (successor, exists) in edges[next].iter().enumerate() {
+                    if *exists {
+                        indegree[successor] -= 1;
+                    }
+                }
+            }
+
+            if processed == node_count {
+                return edges;
+            }
+
+            // Sanders breaks an ordering-graph cycle at the remaining node
+            // with the smallest complete average position. Removing its
+            // incoming constraints preserves all other precedence edges.
+            let breaker = (0..node_count)
+                .filter(|idx| remaining[*idx])
+                .min_by(|left, right| {
+                    positions[*left]
+                        .partial_cmp(&positions[*right])
+                        .unwrap()
+                        .then_with(|| left.cmp(right))
+                })
+                .expect("a cyclic ordering graph has a remaining node");
+            let mut removed = false;
+            for from in 0..node_count {
+                if remaining[from] && edges[from][breaker] {
+                    edges[from][breaker] = false;
+                    removed = true;
+                }
+            }
+            debug_assert!(removed, "a cyclic node must have an incoming edge");
+        }
+    }
+
+    /// Build Sanders' ordering graph from adjacent leaves in every layer.
+    /// Constraints are kept per sibling family because every ordering edge joins
+    /// two direct children of one nesting-tree node.
+    pub(crate) fn subgraph_ordering_graph(&self) -> SubgraphOrderingGraph {
+        let (subgraph_positions, node_positions) = self.aggregate_position();
+        let mut families = Vec::with_capacity(self.num_subgraphs());
+
+        for parent_idx in 0..self.num_subgraphs() {
+            let parent = SubgraphHandle::new(parent_idx);
+            let children = self.child_containers(parent);
+            let mut edges = vec![vec![false; children.len()]; children.len()];
+
+            for row in &self.ranks {
+                for pair in row.windows(2) {
+                    let Some(left) =
+                        self.child_container_under(parent, pair[0])
+                    else {
+                        continue;
+                    };
+                    let Some(right) =
+                        self.child_container_under(parent, pair[1])
+                    else {
+                        continue;
+                    };
+                    if left == right {
+                        continue;
+                    }
+
+                    let left_idx = children
+                        .iter()
+                        .position(|child| *child == left)
+                        .expect("a nesting-tree child must be in its family");
+                    let right_idx = children
+                        .iter()
+                        .position(|child| *child == right)
+                        .expect("a nesting-tree child must be in its family");
+                    edges[left_idx][right_idx] = true;
+                }
+            }
+
+            let positions = children
+                .iter()
+                .map(|child| {
+                    Self::container_position(
+                        &subgraph_positions,
+                        &node_positions,
+                        *child,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let edges = Self::make_ordering_acyclic(edges, &positions);
+            let successors = edges
+                .into_iter()
+                .map(|row| {
+                    row.into_iter()
+                        .enumerate()
+                        .filter_map(|(idx, exists)| exists.then_some(idx))
+                        .collect()
+                })
+                .collect();
+            families.push(SubgraphOrderingFamily {
+                children,
+                successors,
+            });
+        }
+
+        SubgraphOrderingGraph { families }
+    }
+
+    pub(crate) fn predecessor_barycenter_weights(
+        &self,
+        col_map: &Vec<usize>,
+    ) -> Vec<f64> {
+        self.iter()
+            .map(|node| self.barycenter_weight_pred(node, col_map))
+            .collect()
+    }
+
+    pub(crate) fn successor_barycenter_weights(
+        &self,
+        col_map: &Vec<usize>,
+    ) -> Vec<f64> {
+        self.iter()
+            .map(|node| self.barycenter_weight_succ(node, col_map))
+            .collect()
+    }
+
+    fn layer_subgraph_weights(
+        &self,
+        in_layer: &[bool],
+        node_weights: &[f64],
+    ) -> Vec<Option<(f64, usize)>> {
+        let mut result = vec![None; self.num_subgraphs()];
+        for subgraph_idx in (0..self.num_subgraphs()).rev() {
+            let subgraph = &self.nesting_tree.subgraphs[subgraph_idx];
+            let mut sum = 0.;
+            let mut count = 0;
+            for child in &subgraph.subgraphs {
+                if let Some((child_sum, child_count)) = result[child.idx] {
+                    sum += child_sum;
+                    count += child_count;
+                }
+            }
+            for node in &subgraph.nodes {
+                if in_layer[node.idx] {
+                    sum += node_weights[node.idx];
+                    count += 1;
+                }
+            }
+            if count != 0 {
+                result[subgraph_idx] = Some((sum, count));
+            }
+        }
+        result
+    }
+
+    fn container_layer_weight(
+        container: ContainerHandle,
+        in_layer: &[bool],
+        subgraph_weights: &[Option<(f64, usize)>],
+        node_weights: &[f64],
+    ) -> Option<f64> {
+        match container {
+            ContainerHandle::Node(node) => {
+                in_layer[node.idx].then_some(node_weights[node.idx])
+            }
+            ContainerHandle::Subgraph(subgraph) => subgraph_weights
+                [subgraph.idx]
+                .map(|(sum, count)| sum / count as f64),
+        }
+    }
+
+    fn ordered_children_for_layer(
+        &self,
+        parent: SubgraphHandle,
+        ordering_graph: &SubgraphOrderingGraph,
+        in_layer: &[bool],
+        subgraph_weights: &[Option<(f64, usize)>],
+        node_weights: &[f64],
+        subgraph_positions: &[f64],
+        node_positions: &[f64],
+    ) -> Vec<ContainerHandle> {
+        let family = &ordering_graph.families[parent.idx];
+        let mut indegree = vec![0usize; family.children.len()];
+        for successors in &family.successors {
+            for successor in successors {
+                indegree[*successor] += 1;
+            }
+        }
+
+        let mut ready = (0..family.children.len())
+            .filter(|idx| indegree[*idx] == 0)
+            .collect::<Vec<_>>();
+        let mut output = Vec::with_capacity(family.children.len());
+        while !ready.is_empty() {
+            let next_ready_idx = ready
+                .iter()
+                .enumerate()
+                .min_by(|(_, left), (_, right)| {
+                    let left_child = family.children[**left];
+                    let right_child = family.children[**right];
+                    let left_weight = Self::container_layer_weight(
+                        left_child,
+                        in_layer,
+                        subgraph_weights,
+                        node_weights,
+                    )
+                    .unwrap_or_else(|| {
+                        Self::container_position(
+                            subgraph_positions,
+                            node_positions,
+                            left_child,
+                        )
+                    });
+                    let right_weight = Self::container_layer_weight(
+                        right_child,
+                        in_layer,
+                        subgraph_weights,
+                        node_weights,
+                    )
+                    .unwrap_or_else(|| {
+                        Self::container_position(
+                            subgraph_positions,
+                            node_positions,
+                            right_child,
+                        )
+                    });
+                    left_weight
+                        .partial_cmp(&right_weight)
+                        .unwrap()
+                        .then_with(|| left.cmp(right))
+                })
+                .map(|(idx, _)| idx)
+                .expect("a non-empty ready list has a minimum");
+            let current = ready.swap_remove(next_ready_idx);
+            output.push(family.children[current]);
+            for successor in &family.successors[current] {
+                indegree[*successor] -= 1;
+                if indegree[*successor] == 0 {
+                    ready.push(*successor);
+                }
+            }
+        }
+
+        assert_eq!(output.len(), family.children.len());
+        output
+    }
+
+    fn append_ordered_layer(
+        &self,
+        parent: SubgraphHandle,
+        ordering_graph: &SubgraphOrderingGraph,
+        in_layer: &[bool],
+        subgraph_weights: &[Option<(f64, usize)>],
+        node_weights: &[f64],
+        subgraph_positions: &[f64],
+        node_positions: &[f64],
+        output: &mut Vec<NodeHandle>,
+    ) {
+        for child in self.ordered_children_for_layer(
+            parent,
+            ordering_graph,
+            in_layer,
+            subgraph_weights,
+            node_weights,
+            subgraph_positions,
+            node_positions,
+        ) {
+            match child {
+                ContainerHandle::Node(node) => {
+                    if in_layer[node.idx] {
+                        output.push(node);
+                    }
+                }
+                ContainerHandle::Subgraph(subgraph) => {
+                    if subgraph_weights[subgraph.idx].is_some() {
+                        self.append_ordered_layer(
+                            subgraph,
+                            ordering_graph,
+                            in_layer,
+                            subgraph_weights,
+                            node_weights,
+                            subgraph_positions,
+                            node_positions,
+                            output,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Produce Sanders' sorted traversal for one layer. The ordering graph
+    /// supplies hard left-to-right constraints; barycenter weights choose among
+    /// otherwise valid topological orders.
+    pub(crate) fn order_layer_by_ordering_graph(
+        &mut self,
+        layer_idx: usize,
+        ordering_graph: &SubgraphOrderingGraph,
+        node_weights: &[f64],
+    ) {
+        let row = self.ranks[layer_idx].clone();
+        let mut in_layer = vec![false; self.len()];
+        for node in &row {
+            in_layer[node.idx] = true;
+        }
+        let subgraph_weights =
+            self.layer_subgraph_weights(&in_layer, node_weights);
+        let (subgraph_positions, node_positions) = self.aggregate_position();
+        let mut output = Vec::with_capacity(row.len());
+        self.append_ordered_layer(
+            SubgraphHandle::new(0),
+            ordering_graph,
+            &in_layer,
+            &subgraph_weights,
+            node_weights,
+            &subgraph_positions,
+            &node_positions,
+            &mut output,
+        );
+        assert_eq!(output.len(), row.len());
+        self.ranks[layer_idx] = output;
+    }
+
     pub(crate) fn node_order_ws_layerwise(
         &mut self,
         layer_idx: usize,
@@ -1523,4 +2212,35 @@ fn test_rank_api() {
     assert!(r1);
     // The edge should no longer be there!
     assert!(!r2);
+}
+
+#[test]
+fn ordering_graph_breaks_cycles_at_the_leftmost_container() {
+    let edges = vec![
+        vec![false, true, false],
+        vec![false, false, true],
+        vec![true, false, false],
+    ];
+
+    let result = DAG::make_ordering_acyclic(edges, &[0., 1., 2.]);
+
+    assert_eq!(result[0], vec![false, true, false]);
+    assert_eq!(result[1], vec![false, false, true]);
+    assert_eq!(result[2], vec![false, false, false]);
+}
+
+#[test]
+fn connector_belongs_to_the_lowest_common_subgraph() {
+    let mut g = DAG::new();
+    let left = g.new_subgraph(SubgraphHandle::new(0));
+    let right = g.new_subgraph(SubgraphHandle::new(0));
+    let nested = g.new_subgraph(left);
+    let left_node = g.new_node(nested);
+    let right_node = g.new_node(right);
+    let connector = g.new_connector_node(left_node, right_node);
+
+    assert_eq!(
+        g.get_parent_subgraph_index_n(connector),
+        SubgraphHandle::new(0)
+    );
 }

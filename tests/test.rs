@@ -59,6 +59,23 @@ mod tests {
             .unwrap_or_else(|_| panic!("expected numeric y for {}", label))
     }
 
+    fn text_x(svg: &str, label: &str) -> f64 {
+        let label_idx = svg
+            .find(&format!(">{}</tspan>", label))
+            .unwrap_or_else(|| panic!("expected label {}", label));
+        let x_idx = svg[..label_idx]
+            .rfind(" x=\"")
+            .unwrap_or_else(|| panic!("expected x coordinate for {}", label));
+        let x_start = x_idx + 4;
+        let x_end = svg[x_start..]
+            .find('"')
+            .map(|idx| x_start + idx)
+            .expect("expected x coordinate terminator");
+        svg[x_start..x_end]
+            .parse()
+            .unwrap_or_else(|_| panic!("expected numeric x for {}", label))
+    }
+
     fn is_identifier(t: Token, target: &str) -> bool {
         match t {
             Token::Identifier(name) => target == name,
@@ -554,6 +571,26 @@ mod tests {
 
         assert!(svg.contains("fill=\"#d3d3d3ff\""));
         assert!(!svg.contains("fill=\"#000000ff\" \n            stroke-width=\"1\" stroke=\"#d3d3d3ff\""));
+    }
+
+    #[test]
+    fn render_cluster_siblings_follow_definition_order() {
+        let svg = render_dot(include_str!("../inputs/cluster_1.dot"));
+
+        assert!(text_x(&svg, "cluster_0") < text_x(&svg, "cluster_1"));
+        assert!(text_x(&svg, "cluster_1") < text_x(&svg, "cluster_2"));
+        assert!(text_x(&svg, "cluster_0") < text_x(&svg, "L"));
+        assert!(text_x(&svg, "L") < text_x(&svg, "cluster_1"));
+        assert!(text_x(&svg, "L") == text_x(&svg, "U"));
+    }
+
+    #[test]
+    fn render_complex_nested_clusters() {
+        let svg = render_dot(include_str!("../inputs/complex_nested.dot"));
+
+        assert!(svg.contains("Web Application"));
+        assert!(svg.contains("Backend Layer"));
+        assert!(svg.contains("Order Service"));
     }
 
     #[test]

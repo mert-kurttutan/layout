@@ -429,6 +429,15 @@ impl<'a> BK<'a> {
                 }
             }
         }
+        // Border segments are structural constraints. A connector-to-connector
+        // alignment is only a placement preference, so discard the latter when
+        // it crosses a border instead of treating the conflict as impossible.
+        strong_edges.retain(|strong| {
+            !border_edges
+                .iter()
+                .any(|border| Self::are_edges_crossing(*strong, *border))
+        });
+
         let mut res: Vec<(NodeHandle, NodeHandle)> = Vec::new();
 
         for reg in regular_edges.iter() {
@@ -442,13 +451,6 @@ impl<'a> BK<'a> {
                 res.push((r0[reg.0], r1[reg.1]));
             }
         }
-
-        let conflict = border_edges.iter().any(|border| {
-            strong_edges
-                .iter()
-                .any(|strong| Self::are_edges_crossing(*strong, *border))
-        });
-        assert!(!conflict, "strong edge conflicts with border edge");
 
         for border in border_edges {
             res.push((r0[border.0], r1[border.1]));
